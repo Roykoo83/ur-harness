@@ -1,0 +1,107 @@
+# 상시 서비스 정의 — OS 중립. 여기서 systemd(Linux) · launchd(macOS) · 작업스케줄러(Windows) 를 생성한다
+#
+#   schedule.every     N초마다
+#   schedule.calendar  systemd OnCalendar 문법 (예: "Mon..Fri 08:00,17:00")
+#   schedule.keepalive 상시 실행 · 죽으면 재시작
+#   platform           이 OS 에서만 설치한다 (없으면 전부)
+#   optional           기본 설치에서 제외. --with <name> 으로 켠다
+
+services:
+  # ── 수집 ────────────────────────────────────────────────────────────
+  - name: nworks-cycle
+    desc: "그룹웨어 수집 → 파싱 → 판정 → 정본 동기화"
+    exec: agents/nworks/nworks_cycle.py
+    schedule: { every: 3600 }
+
+  - name: fathom-minutes
+    desc: "회의 전사 수집 · 회의록 초안"
+    exec: agents/fathom/collect_meetings.py
+    schedule: { calendar: "Tue 11:30" }
+
+  - name: source-changefeed
+    desc: "원천 드라이브 변경 추적"
+    exec: core/u_changefeed.py
+    schedule: { every: 7200 }
+
+  # ── 승격·색인 ───────────────────────────────────────────────────────
+  - name: ssot-promote
+    desc: "정제된 자료를 정본으로 승격 (해시 검증)"
+    exec: core/ssot_promote.py
+    schedule: { every: 1800 }
+
+  - name: ssot-index
+    desc: "정본 색인 재생성 (신선도 가드 포함)"
+    exec: core/make-index.py
+    schedule: { every: 10800 }
+
+  # ── 감시 ────────────────────────────────────────────────────────────
+  - name: watchdog
+    desc: "신선도 · 정지 · 중복 감시"
+    exec: core/watchdog.py
+    schedule: { every: 900 }
+
+  - name: gate-check
+    desc: "계약과 현실의 정합성 게이트"
+    exec: core/gate_check.py
+    schedule: { every: 21600 }
+
+  # ── 보고 ────────────────────────────────────────────────────────────
+  - name: daily-brief
+    desc: "부서방 정기 브리핑"
+    exec: agents/nworks/daily_brief.py
+    schedule: { calendar: "Mon..Fri 08:00,17:00" }
+
+  - name: weekly-dashboard
+    desc: "주간 대시보드 생성·게시"
+    exec: agents/dashboard/build_dashboards.py
+    schedule: { calendar: "Mon 09:30" }
+
+  - name: ops-ledger
+    desc: "과제 태스크 원장 갱신"
+    exec: tasks/원장/회차실행.sh
+    schedule: { calendar: "Mon..Fri 08:00,13:00,17:00" }
+    optional: true
+
+  - name: budget-sync
+    desc: "예산 원장 동기화"
+    exec: agents/budget/sync_budget_status.py
+    schedule: { calendar: "Mon..Fri 09:00" }
+    optional: true
+
+  # ── 조직·인사 ───────────────────────────────────────────────────────
+  - name: roster-sync
+    desc: "조직도 → 인물 온톨로지 갱신"
+    exec: core/roster_sync.py
+    schedule: { calendar: "Mon 09:17" }
+
+  - name: hr-sync-check
+    desc: "조직도 ↔ 온톨로지 정합성 점검"
+    exec: agents/nworks/hr_sync_check.py
+    schedule: { calendar: "Mon 09:30" }
+
+  # ── 상시 ────────────────────────────────────────────────────────────
+  - name: agent-bridge
+    desc: "메신저 ↔ 에이전트 게이트웨이 중계"
+    exec: agents/nworks/nworks_hermes_bridge.py
+    schedule: { keepalive: true }
+    optional: true
+
+  - name: tunnel-guard
+    desc: "터널 감시·복구 (봇 수신 콜백용)"
+    exec: agents/nworks/tunnel_guard.py
+    schedule: { every: 600 }
+    optional: true
+
+  # ── 유지보수 ────────────────────────────────────────────────────────
+  - name: log-rotate
+    desc: "로그 회전"
+    exec: core/rotate_logs.py
+    schedule: { every: 21600 }
+
+  # ── macOS 전용 ──────────────────────────────────────────────────────
+  - name: mount-resync
+    desc: "DriveFS 마운트 재동기화 (마운트를 쓸 때만)"
+    exec: core/drivefs_resync.py
+    schedule: { calendar: "*-*-* 22:00" }
+    platform: [darwin]
+    optional: true

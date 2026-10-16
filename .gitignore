@@ -1,0 +1,59 @@
+# ── 절대 커밋하지 않는 것 ─────────────────────────────────────────
+scan.local.json          # 조직 고유 금지어 목록 (이름·계정·조직명)
+*.local.json
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+*token*.json
+!*token*.example.json
+credentials*.json
+!credentials*.example.json
+
+# ── configure 가 만드는 것 — 실제 값이 들어 있다 ─────────────────
+build/
+config/harness.yaml
+config/harness.yml
+config/harness.json
+install/systemd/ur-*.service
+install/systemd/ur-*.timer
+install/launchd/*.plist
+install/windows/*.xml
+
+# ── 실행 중 생기는 것 ─────────────────────────────────────────────
+output/
+workspace/
+state/
+logs/
+*.log
+data/
+!data/.gitkeep
+
+# ── 파이썬 ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# ── 노드 ──────────────────────────────────────────────────────────
+node_modules/
+package-lock.json
+
+# ── OS·편집기 ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 편집 백업 — 공개본에 들어가면 게이트를 우회한다
+*.bak
+*.bak-*
+*.orig
+
+# macOS launchd 생성물 — 정본은 install/services.yaml 이다
+*.plist

@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>회의록 워크플로우 설명서</title>
+<style>
+:root{
+  --bg:#FAFAF9; --surface:#FFFFFF; --surface2:#F4F4F5;
+  --ink:#18181B; --ink2:#52525B; --ink3:#71717A;
+  --line:#E4E4E7; --hair:#F0F0F1;
+  --acc:#0F766E; --acc-g:#14DEAF; --acc-m:#0D9488; --warm:#C2410C;
+  --f:"Paperlogy","Freesentation","Noto Sans KR",-apple-system,sans-serif;
+  --m:ui-monospace,"SF Mono",Menlo,monospace;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0C0C0E; --surface:#16161A; --surface2:#1D1D22;
+  --ink:#F4F4F5; --ink2:#A1A1AA; --ink3:#80808A;
+  --line:#27272A; --hair:#1F1F23;
+  --acc:#5EEAD4; --acc-m:#2DD4BF; --warm:#FB923C;
+}}
+:root[data-theme="dark"]{
+  --bg:#0C0C0E; --surface:#16161A; --surface2:#1D1D22;
+  --ink:#F4F4F5; --ink2:#A1A1AA; --ink3:#80808A;
+  --line:#27272A; --hair:#1F1F23;
+  --acc:#5EEAD4; --acc-m:#2DD4BF; --warm:#FB923C;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f);
+     -webkit-font-smoothing:antialiased;line-height:1.6}
+.wrap{max-width:880px;margin:0 auto;padding:64px 28px 100px}
+h1{font-size:clamp(34px,5.4vw,52px);font-weight:900;letter-spacing:-.04em;line-height:1.08;word-break:keep-all}
+h2{font-size:clamp(23px,3.2vw,30px);font-weight:800;letter-spacing:-.03em;margin:0 0 14px;word-break:keep-all}
+h3{font-size:17px;font-weight:800;letter-spacing:-.02em;margin:0 0 7px;word-break:keep-all}
+p{color:var(--ink2);word-break:keep-all;margin:0 0 13px;font-size:15.5px}
+.lede{font-size:19px;color:var(--ink2);margin-top:16px;font-weight:500;word-break:keep-all}
+.eb{font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--acc);text-transform:uppercase}
+.rule{height:2px;width:52px;background:var(--acc-g);border-radius:1px;margin:18px 0 0}
+section{margin-top:64px;padding-top:36px;border-top:1px solid var(--hair)}
+section:first-of-type{border-top:0}
+strong{color:var(--ink);font-weight:750}
+code{font-family:var(--m);font-size:.88em;background:var(--surface2);
+     padding:2px 6px;border-radius:5px;color:var(--ink)}
+pre{font-family:var(--m);font-size:13px;background:var(--surface2);border:1px solid var(--line);
+    border-radius:10px;padding:14px 16px;overflow-x:auto;margin:14px 0;line-height:1.55}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0}
+.note{border-left:3px solid var(--acc-g);background:var(--surface);padding:14px 18px;
+      border-radius:0 10px 10px 0;margin:16px 0}
+.warn{border-left:3px solid var(--warm);background:var(--surface);padding:14px 18px;
+      border-radius:0 10px 10px 0;margin:16px 0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hair)}
+th{font-size:11.5px;letter-spacing:.09em;color:var(--ink3);font-weight:800;text-transform:uppercase}
+td{color:var(--ink2)}
+td strong{color:var(--ink)}
+.scroll{overflow-x:auto}
+ol,ul{margin:0 0 13px;padding-left:20px;color:var(--ink2);font-size:15.5px}
+li{margin:5px 0;word-break:keep-all}
+li::marker{color:var(--acc-m)}
+
+/* 파이프라인 */
+.pipe{display:flex;align-items:stretch;gap:0;margin:26px 0 8px;overflow-x:auto;padding-bottom:6px}
+.st{flex:1 0 128px;background:var(--surface);border:1px solid var(--line);
+    border-radius:12px;padding:13px 12px;text-align:center;position:relative;z-index:2}
+.st b{display:block;font-size:14px;font-weight:800;letter-spacing:-.02em}
+.st span{display:block;font-size:11.5px;color:var(--ink3);margin-top:3px}
+.lnk{flex:0 0 30px;position:relative;align-self:center;height:2px;background:var(--line);overflow:hidden}
+.lnk::after{content:"";position:absolute;top:-1px;left:-40%;width:40%;height:4px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--acc-g),transparent);
+  animation:run 2.4s linear infinite}
+.lnk.d2::after{animation-delay:.3s}.lnk.d3::after{animation-delay:.6s}.lnk.d4::after{animation-delay:.9s}
+@keyframes run{0%{left:-40%}100%{left:100%}}
+
+/* 등장 */
+/* JS 가 돌 때만 숨긴다. JS 가 없거나 인쇄할 때는 그대로 보인다 */
+html.js .rv{opacity:0;transform:translateY(14px);transition:opacity .55s ease,transform .55s cubic-bezier(.22,.61,.36,1)}
+html.js .rv.in{opacity:1;transform:none}
+@media print{ html.js .rv{opacity:1!important;transform:none!important} .lnk::after{animation:none} }
+
+@media (prefers-reduced-motion:reduce){
+  .lnk::after{animation:none;left:30%;opacity:.55}
+  html.js .rv{opacity:1!important;transform:none!important;transition:none!important}
+}
+@media (max-width:640px){ .wrap{padding:44px 18px 80px} }
+</style>
+</head>
+<body>
+<!-- ===================================================================
+  Urban 테마 토글 (붙여넣기용 컴포넌트)
+
+  쓰는 법
+    1. 이 블록 전체를 <body> 안 맨 위에 붙인다
+    2. 페이지 CSS 가 아래 3단 구조로 토큰을 정의하고 있어야 한다
+
+       :root{ --bg:...; --ink:...; }                       라이트 (기본)
+       @media (prefers-color-scheme:dark){
+         :root:not([data-theme="light"]){ --bg:...; }       OS 다크
+       }
+       :root[data-theme="dark"]{ --bg:...; }                수동 다크
+
+  동작
+    - 처음 열면 OS 설정을 따른다
+    - 누르면 라이트 >> 다크 >> 시스템 순환. 선택은 localStorage 에 남는다
+    - JS 가 없으면 버튼이 보이지 않는다. 내용은 그대로 보인다
+    - 인쇄하면 항상 라이트로 나간다
+=================================================================== -->
+<style>
+.uthm{position:fixed;top:16px;right:16px;z-index:999;display:none;
+      align-items:center;gap:6px;padding:7px 12px;border-radius:99px;
+      border:1px solid var(--line,#E4E4E7);background:var(--surface,#fff);
+      color:var(--ink2,#52525B);font:inherit;font-size:12px;font-weight:700;
+      letter-spacing:.02em;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.06);
+      transition:border-color .15s,color .15s}
+html.js .uthm{display:inline-flex}
+.uthm:hover{border-color:var(--acc-m,#0D9488);color:var(--acc,#0F766E)}
+.uthm:focus-visible{outline:2px solid var(--acc-m,#0D9488);outline-offset:2px}
+.uthm svg{width:14px;height:14px;flex:none}
+@media print{.uthm{display:none!important}}
+@media (max-width:640px){.uthm{top:10px;right:10px;padding:6px 10px;font-size:11px}}
+</style>
+
+<button class="uthm" id="uthm" type="button" aria-live="polite">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" aria-hidden="true"><use href="#uthm-i"/></svg>
+  <span id="uthm-t">시스템</span>
+</button>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="uthm-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="uthm-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></symbol>
+  <symbol id="uthm-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/>
+    <path d="M12 3v18"/><path d="M12 3a9 9 0 010 18" fill="currentColor" stroke="none"/></symbol>
+</svg>
+
+<script>
+(function(){
+  var KEY = "urban-theme";
+  var ORDER = ["system","light","dark"];
+  var LABEL = {system:"시스템", light:"라이트", dark:"다크"};
+  var ICON  = {system:"#uthm-auto", light:"#uthm-sun", dark:"#uthm-moon"};
+  var root = document.documentElement;
+  root.classList.add("js");
+
+  function read(){
+    try { var v = localStorage.getItem(KEY); return ORDER.indexOf(v) > -1 ? v : "system"; }
+    catch(e){ return "system"; }          // 사생활 보호 모드 등에서 접근이 막힌다
+  }
+  function write(v){ try { localStorage.setItem(KEY, v); } catch(e){} }
+
+  function apply(mode){
+    if (mode === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", mode);
+    var btn = document.getElementById("uthm");
+    if (!btn) return;
+    document.getElementById("uthm-t").textContent = LABEL[mode];
+    btn.querySelector("use").setAttribute("href", ICON[mode]);
+    btn.setAttribute("aria-label", "화면 테마: " + LABEL[mode] + ". 눌러서 변경");
+  }
+
+  var cur = read();
+  apply(cur);                              // 버튼이 그려지기 전에도 테마는 먼저 적용된다
+
+  document.addEventListener("DOMContentLoaded", function(){
+    apply(cur);
+    var btn = document.getElementById("uthm");
+    if (!btn) return;
+    btn.addEventListener("click", function(e){
+      // 슬라이드 덱처럼 문서 전체에 클릭 핸들러가 있는 페이지가 있다.
+      // 막지 않으면 토글을 누를 때 슬라이드가 함께 넘어간다.
+      e.stopPropagation();
+      cur = ORDER[(ORDER.indexOf(cur) + 1) % ORDER.length];
+      write(cur); apply(cur);
+    }, true);
+  });
+
+  document.addEventListener("keydown", function(e){
+    // 덱의 화살표·스페이스 조작과 겹치지 않는 키만 쓴다
+    if (e.key === "t" && !e.metaKey && !e.ctrlKey && !e.altKey &&
+        !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||"")) {
+      cur = ORDER[(ORDER.indexOf(cur) + 1) % ORDER.length];
+      write(cur); apply(cur);
+    }
+  });
+})();
+</script>
+<!-- =============== Urban 테마 토글 끝 =============== -->
+
+
+
+<div class="wrap">
+
+<header class="rv">
+  <div class="eb">Urban Data Lab · 연구기획사업부</div>
+  <h1>회의록 워크플로우</h1>
+  <p class="lede">회의 음성이 어떻게 정본 회의록이 되는지, 그 과정에서 사람이 무엇을 하는지.</p>
+  <div class="rule"></div>
+</header>
+
+<section class="rv">
+  <h2>한 눈에</h2>
+  <p>다섯 단계다. 앞의 네 단계는 자동이고, <strong>사람은 한 번만 개입한다.</strong></p>
+  <div class="pipe">
+    <div class="st"><b>수집</b><span>회의 음성</span></div>
+    <div class="lnk"></div>
+    <div class="st"><b>전처리</b><span>추출 · 분할</span></div>
+    <div class="lnk d2"></div>
+    <div class="st"><b>전사</b><span>음성 → 글자</span></div>
+    <div class="lnk d3"></div>
+    <div class="st"><b>정본 대조</b><span>용어 교정</span></div>
+    <div class="lnk d4"></div>
+    <div class="st"><b>확정</b><span>SSOT 등록</span></div>
+  </div>
+  <div class="note">
+    <h3>이 워크플로우의 핵심은 3단계가 아니라 4단계다</h3>
+    <p style="margin:0">전사는 이제 몇 초면 끝난다. 남은 어려움은 전부 <strong>고유명사</strong>에 있다.
+    사람 이름, 과제명, 영어 약어. 이것을 회사 정본과 맞추는 것이 4단계이고, 이 워크플로우가 존재하는 이유다.</p>
+  </div>
+</section>
+
+<section class="rv">
+  <div class="eb">1단계</div>
+  <h2>회의 종류가 경로를 정한다</h2>
+  <p>갈림길은 하나다. 온라인인가 대면인가.</p>
+  <div class="scroll"><table>
+    <tr><th></th><th>온라인 회의</th><th>대면 회의</th></tr>
+    <tr><td><strong>전사</strong></td><td>Fathom (자동)</td><td>Groq</td></tr>
+    <tr><td><strong>화자 구분</strong></td><td><strong>된다</strong></td><td>안 된다</td></tr>
+    <tr><td><strong>내가 할 일</strong></td><td>없음</td><td>녹음 파일 전달</td></tr>
+    <tr><td><strong>설치</strong></td><td>없음</td><td>ffmpeg + 본인 Groq 키</td></tr>
+  </table></div>
+  <p>온라인 회의는 참석자별로 음성이 따로 들어와서 누가 말했는지 구분된다.
+  대면 녹음은 마이크 하나로 받기 때문에 구분되지 않는다.
+  <strong>온라인으로 할 수 있는 회의를 온라인으로 하는 것이 품질을 올리는 가장 확실한 방법이다.</strong></p>
+</section>
+
+<section class="rv">
+  <div class="eb">2단계</div>
+  <h2>전처리는 손댈 것이 없다</h2>
+  <p>녹음 파일을 주면 <code>transcribe.py</code> 하나가 전부 처리한다. <strong>다른 스크립트를 직접 부르지 않는다.</strong></p>
+  <pre>python3 ~/.claude/skills/minutes/scripts/transcribe.py "&lt;파일&gt;" --out "&lt;작업폴더&gt;"</pre>
+  <p>맥과 윈도우에서 같은 명령이다. 윈도우는 <code>python3</code> 대신 <code>py</code> 를 쓴다.</p>
+  <div class="card">
+    <ol>
+      <li><strong>설치 상태를 점검한다.</strong> 빠진 것이 있으면 고치는 명령까지 알려준다</li>
+      <li><strong>녹음을 검사한다.</strong> 음량과 발화 비율을 재서 <strong>너무 조용하면 전사하지 않고 멈춘다</strong></li>
+      <li><strong>영상이면 음성만 뽑는다.</strong> mp4·mov를 그대로 줘도 된다</li>
+      <li><strong>16kHz 모노 Opus로 바꾼다.</strong> 전사 엔진이 어차피 16kHz 모노로 내리므로 손실이 없다</li>
+      <li><strong>25MB를 넘으면 쪼갠다.</strong> 바이트 경계가 아니라 <strong>무음 지점</strong>에서 자른다</li>
+      <li><strong>조각별 시작 시각을 기록한다.</strong> 전사 후 원본 시간축으로 되돌리기 위해서다</li>
+      <li><strong>전사 후 품질을 검사한다.</strong> 커버리지와 빈 조각을 보고 미달이면 <strong>확정하지 말라고 막는다</strong></li>
+    </ol>
+  </div>
+  <div class="note">
+    <h3>왜 무음에서 자르는가</h3>
+    <p style="margin:0">크기로 자르면 말 중간이 끊긴다. 그러면 양쪽 조각 모두 그 단어를 놓친다.
+    목표 경계 앞뒤 45초 안에서 무음을 찾아 그 한가운데를 자른다.
+    실측에서 7분 통화에 무음이 170곳 있었고, 4조각으로 나누면서 <strong>431.55초를 빈틈없이 덮었다.</strong></p>
+  </div>
+  <p>32kbps 기준 2시간 안팎의 회의는 대개 쪼갤 일이 없다. 다만 실제 크기는 녹음에 따라 달라지므로, <strong>만든 뒤 바이트를 재서 한도를 넘으면 자동으로 더 잘게 나눈다.</strong></p>
+</section>
+
+<section class="rv">
+  <div class="eb">3단계</div>
+  <h2>전사는 이제 병목이 아니다</h2>
+  <p>같은 7분 11초 통화를 두 경로로 돌린 실측이다.</p>
+  <div class="scroll"><table>
+    <tr><th>경로</th><th>소요</th><th>1시간 회의 환산</th></tr>
+    <tr><td><strong>Groq</strong> whisper-large-v3</td><td><strong>3.0초</strong></td><td>약 25초</td></tr>
+    <tr><td>로컬 whisper-large-v3</td><td>15분</td><td>약 2시간</td></tr>
+  </table></div>
+  <p>Groq는 <strong>우리가 로컬에서 쓰던 것과 같은 모델</strong>을 돌린다.
+  실제로 대조해 보니 인식 결과가 거의 일치했다. 속도만 달라진다.</p>
+  <div class="warn">
+    <h3>더 빠른 모델(turbo)을 쓰지 않는 이유</h3>
+    <p style="margin:0">turbo는 5배 더 빠르지만 실측에서 <strong>실존하는 박지영 교수를 지우고
+    「박정준」이라는 없는 이름을 세 번 만들어냈다.</strong> IRB는 「아야비나」가 되어 복구가 불가능했다.
+    우리 문서는 IRB·RFP·WSI·KOLAS 같은 약어로 돌아간다. 속도를 위해 이것을 잃을 수 없다.</p>
+  </div>
+  <p><code>--offline</code> 을 붙이면 로컬로 돌린다. 다만 1시간 녹음에 약 2시간이 걸리고
+  모델 2.9GB를 미리 받아둬야 한다. <strong>평소 쓰는 경로가 아니라 예외 경로다.</strong></p>
+</section>
+
+<section class="rv">
+  <div class="eb">전사 전후</div>
+  <h2>두 곳에서 멈춰 세운다</h2>
+  <p>조용한 실패를 막기 위해 두 관문을 두었다. 2026-09-22에 45분 회의 녹음에서
+  상대 발언이 전부 빠졌는데 아무 경고 없이 전사가 끝난 일이 계기였다.</p>
+
+  <div class="warn">
+    <h3>전사 전 · 외부 전송을 사람이 승인한다</h3>
+    <p style="margin:0">기본 경로는 녹음을 <strong>Groq(미국) 서버로 보낸다.</strong>
+    실행하면 그 사실을 화면에 알리고 승인을 묻는다.
+    외부 인사 발언, 환자 정보, 미공개 과제 내용이 있으면 <strong>거절하고
+    <code>--offline</code> 으로 다시 돌린다.</strong> 느리지만 나가지 않는다.</p>
+  </div>
+
+  <div class="note">
+    <h3>전사 후 · 품질이 미달이면 확정을 막는다</h3>
+    <p style="margin:0">커버리지와 빈 조각을 검사한다. 녹음 길이에 비해 전사가 적거나
+    비어 있는 조각이 있으면 <strong>경고를 띄우고 종료 코드 2로 끝낸다.</strong>
+    그 상태로 회의록을 확정하면 빠진 발언이 있는 채로 정본이 된다.</p>
+  </div>
+
+  <div class="scroll"><table>
+    <tr><th>종료 코드</th><th>뜻</th><th>할 일</th></tr>
+    <tr><td><strong>0</strong></td><td>정상</td><td>교정 단계로 간다</td></tr>
+    <tr><td><strong>2</strong></td><td>전사 품질 경고</td><td><strong>확정하지 말고 원인을 확인한다</strong></td></tr>
+    <tr><td><strong>3</strong></td><td>녹음이 너무 조용함</td><td>화면 기록이면 OBS로 다시 녹화한다</td></tr>
+    <tr><td><strong>1</strong></td><td>준비 부족 또는 전송 거절</td><td>화면 안내를 따른다</td></tr>
+  </table></div>
+
+  <p>중간에 끊겨도 이미 전사한 조각은 남는다. 다시 실행하면 <strong>끝난 조각은 건너뛰고
+  이어서</strong> 한다. 같은 구간을 두 번 보내지 않는다.</p>
+</section>
+
+<section class="rv">
+  <div class="eb">4단계 · 이 워크플로우의 핵심</div>
+  <h2>전사보다 정본을 믿는다</h2>
+  <p>아무리 좋은 모델도 고유명사는 틀린다. 실제 통화 한 건에서 <strong>교수 이름 한 명을 네 번 다르게 들었다.</strong></p>
+  <div class="card">
+    <table style="margin:0">
+      <tr><th>전사가 들은 것</th><th>SSOT 온톨로지</th></tr>
+      <tr><td>박지<strong>훈</strong> 교수님</td><td rowspan="4" style="vertical-align:middle">
+        <strong style="color:var(--acc)">박지영</strong><br>
+        <span style="font-size:12.5px;color:var(--ink3)">칠곡경북대병원 병리과 교수<br>AI바우처 총괄책임자(PI)</span></td></tr>
+      <tr><td>박지<strong>영</strong> 교수님</td></tr>
+      <tr><td>박<strong>진</strong> 교수님</td></tr>
+      <tr><td>박<strong>재영</strong> 교수님</td></tr>
+    </table>
+  </div>
+  <p>대조 단계는 SSOT 온톨로지(사람·과제·조직·제품)를 읽어 이것을 맞춘다.
+  같은 방식으로 <code>나이파</code>는 NIPA로, <code>메디거스</code>는 Medicus로, <code>7곡</code>은 칠곡으로 풀린다.
+  <strong>온톨로지는 읽기만 한다. 전사가 온톨로지를 고치는 일은 없다.</strong></p>
+  <div class="warn">
+    <h3>진짜 위험한 오류는 따로 있다</h3>
+    <p style="margin:0">같은 통화에서 <strong>복지부</strong>를 <strong>국제부</strong>로 들은 곳이 있었다.
+    「7곡」은 누가 봐도 틀린 줄 알지만, <strong>「국제부 바우처 사업」은 읽는 사람이 의심 없이 넘어간다.</strong>
+    부처가 바뀐 회의록이 정본이 된다. 대조 단계가 잡아내는 것이 이 종류다.</p>
+  </div>
+</section>
+
+<section class="rv">
+  <div class="eb">5단계</div>
+  <h2>사람이 하는 일은 한 번뿐이다</h2>
+  <p>대조가 끝나면 세 가지를 함께 받는다.</p>
+  <div class="card">
+    <h3>1. 회의록 초안</h3>
+    <p style="margin:0 0 14px">교정이 반영된 본문</p>
+    <h3>2. 고친 것 목록</h3>
+    <p style="margin:0 0 14px">무엇을 무엇으로 왜 바꿨는지</p>
+    <h3 style="color:var(--acc)">3. 모르겠는 것</h3>
+    <p style="margin:0">확정할 수 없어 <strong>빈칸으로 둔 항목</strong>과 그 앞뒤 문맥</p>
+  </div>
+  <p>세 번째가 중요하다. <strong>확실하지 않은 것을 그럴듯하게 채우지 않는다.</strong>
+  앞의 교수 이름이 그런 경우다. 문맥상 박지영으로 보이지만 온톨로지에 박지훈도 실재하므로,
+  넷을 하나로 합치면 실존 인물 둘을 섞게 된다. 그래서 묻는다.</p>
+  <p><strong>당신이 채운 것이 정본이 된다.</strong> 같은 실수가 반복되면 규칙으로 만들어 다음부터 자동으로 막는다.</p>
+</section>
+
+<section class="rv">
+  <h2>무엇이 SSOT로 가나</h2>
+  <div class="scroll"><table>
+    <tr><th>산출물</th><th>SSOT 등록</th><th>이유</th></tr>
+    <tr><td><strong>확정본</strong></td><td>등록</td><td>회의의 기록</td></tr>
+    <tr><td><strong>교정기록</strong></td><td>등록</td><td>왜 그렇게 고쳤는지 남아야 다음 사람이 이어받는다</td></tr>
+    <tr><td>전사 원문</td><td>보안 등급 판정 후</td><td>발언 그대로라 S2 이상이면 경로만 남긴다</td></tr>
+  </table></div>
+  <p class="sm" style="font-size:13.5px;color:var(--ink3)">규약 2026-09-21. 그 전에는 확정본만 올렸으나,
+  에이전트 산출물이 로컬에만 남으면 팀원이 이어받을 수 없어 교정기록을 포함하도록 바뀌었다.</p>
+</section>
+
+<section class="rv">
+  <h2>내 PC에서 쓰려면</h2>
+  <p>대부분은 <strong>설치할 것이 없다.</strong></p>
+  <div class="card">
+    <h3>온라인 회의만 한다면</h3>
+    <p style="margin:0 0 6px">설치 없음. Claude Code 창에 이렇게 쓰면 된다.</p>
+    <pre>회의록 만들어줘. Fathom에서 오늘 [회의명] 가져와줘.</pre>
+  </div>
+  <div class="card">
+    <h3>대면 회의를 녹음한다면 (약 10분)</h3>
+    <ol style="margin-bottom:0">
+      <li><strong>ffmpeg 설치</strong><br>
+        <code>winget install --id Gyan.FFmpeg -e</code> (Windows) · <code>brew install ffmpeg</code> (Mac)<br>
+        <span style="font-size:13px;color:var(--ink3)">윈도우는 <code>--id Gyan.FFmpeg -e</code> 를 빼면 엉뚱한 게 깔린다.
+        설치 후 터미널을 껐다 다시 켠다</span></li>
+      <li><strong>파이썬 패키지</strong> · <code>python3 -m pip install requests</code> (윈도우는 <code>py -m pip</code>)</li>
+      <li><strong>Groq 키 발급</strong> · console.groq.com 에서 <strong>본인 회사 이메일로</strong> 가입<br>
+        <span style="font-size:13px;color:var(--ink3)">무료 한도가 계정당 하루 8시간이다.
+        한 키를 나눠 쓰면 한도를 나눠 쓰게 되고, 그 키가 막히면 전원이 멈춘다</span></li>
+      <li><strong>스킬 설치</strong> · SSOT <code>50_도구상자/10_스킬/minutes/설치.md</code> 를 읽어 설치하도록 지시<br>
+        <span style="font-size:13px;color:var(--ink3)">설치 후 Claude Code 를 완전히 종료했다 다시 켠다</span></li>
+      <li><strong>확인</strong> · <code>transcribe.py --doctor</code><br>
+        <span style="font-size:13px;color:var(--ink3)">전부 OK 면 끝이다. 문제가 있으면 고치는 명령이 같이 나온다</span></li>
+    </ol>
+  </div>
+  <p>쓸 때는 Claude Code 창에 <strong>녹음 파일을 끌어다 놓고</strong> "이거 회의록 만들어줘"라고 하면 된다.
+  영상 파일이어도 된다.</p>
+  <div class="note">
+    <h3>녹음할 때 한 가지</h3>
+    <p style="margin:0">휴대폰을 <strong>테이블 한가운데</strong>에 둔다. 내 앞에 두면 멀리 앉은 사람 목소리가 들어오지 않는다.
+    마이크에 안 들어온 말은 어떤 모델로도 복구되지 않는다.</p>
+  </div>
+</section>
+
+<section class="rv">
+  <h2>지키는 것</h2>
+  <ul>
+    <li><strong>전사 원문은 고치지 않고 보존한다.</strong> 교정은 사본에서 한다</li>
+    <li><strong>이름·과제명·약어는 정본을 믿는다.</strong> 전사가 아니라 온톨로지가 기준이다</li>
+    <li><strong>확정 못 한 것을 그럴듯하게 채우지 않는다.</strong> 빈칸으로 두고 사람에게 묻는다</li>
+    <li><strong>확정본과 교정기록을 함께 올린다.</strong> 판단 근거가 남아야 이어받을 수 있다</li>
+    <li><strong>SSOT 온톨로지는 읽기 전용이다.</strong> 전사 작업이 정본을 고치지 않는다</li>
+  </ul>
+</section>
+
+<section class="rv" style="border-top:1px solid var(--hair)">
+  <p style="font-size:13px;color:var(--ink3);margin:0">
+    데이터 흐름도는 같은 폴더의 <code>회의록흐름.html</code>.
+    경로 판단은 <code>구조도.md</code>, 동료용 설정은 <code>동료_설정.md</code>.<br>
+    minutes v1.0.0 · 2026-09-29 · macOS 에서 검증 (자가시험 24/24) · 윈도우는 실사용 검증 전
+  </p>
+</section>
+
+</div>
+
+<script>
+(function(){
+  if (!('IntersectionObserver' in window)) return;   // 미지원이면 그냥 보이게 둔다
+  document.documentElement.classList.add('js');
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, {rootMargin:'0px 0px -8% 0px', threshold:0.05});
+  document.querySelectorAll('.rv').forEach(function(el){ io.observe(el); });
+})();
+</script>
+
+</body>
+</html>

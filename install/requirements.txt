@@ -1,0 +1,12 @@
+# UR Harness — 파이썬 의존성
+# 설치:  python3 -m pip install -r install/requirements.txt
+
+pyyaml>=6.0          # 설정 로더
+requests>=2.31       # REST API 호출
+PyJWT[crypto]>=2.8   # 그룹웨어 Service Account (RS256)
+python-dateutil>=2.8 # 날짜 파싱
+
+# 문서 변환 (선택 — 없으면 해당 기능만 건너뛴다)
+openpyxl>=3.1        # 엑셀 원장
+python-pptx>=0.6     # 발표자료 생성
+olefile>=0.47        # 한글(hwp) 메타 추출

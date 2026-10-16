@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""nwctl — NAVER WORKS API 검증·조작 CLI (전문가 에이전트의 손)
+
+  nwctl doctor              config·키·패키지 상태 점검 (호출 없음)
+  nwctl verify              endpoint 검증 상태표 출력
+  nwctl token               SA 토큰 발급 시험 (P0 스모크 1)
+  nwctl users               구성원 목록 (directory.read)
+  nwctl bot-send --user ID --text "..."   봇 발송 — 외부 전송 게이트: Roy 승인 후에만
+  nwctl ua-auth [ACCOUNT]   UA OAuth 1회 동의 (기본 {{BOT_USER}}@ — 브라우저 로그인 → 토큰 캐시)
+  nwctl mail-folders [ACCOUNT]  메일 폴더 목록 (UA 토큰)
+  nwctl mail-pull [ACCOUNT] [--filter none]
+                            받은편지함 수집 → output/raw_mail/<계정키>/ (읽기 전용)
+                            --filter none 이 운영 기본 (Roy 확정 2026-08-12: 전 수신 수집)
+"""
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from nworks.endpoints import ENDPOINTS  # noqa: E402
+
+
+def cmd_doctor(_):
+    try:
+        import jwt, requests  # noqa
+        print("[ok] PyJWT / requests 설치됨")
+    except ImportError as e:
+        print(f"[!!] 패키지 누락: {e} — pip install PyJWT cryptography requests")
+        return 1
+    from nworks.config import load_config, ConfigError
+    try:
+        cfg = load_config()
+        print(f"[ok] config: client_id={cfg['client_id'][:6]}··· service_account={cfg['service_account']}")
+    except ConfigError as e:
+        print(f"[!!] {e}")
+        return 1
+    return 0
+
+
+def cmd_verify(_):
+    for key, (method, path, scope, verified) in ENDPOINTS.items():
+        mark = "OK " if verified else "미검증"
+        print(f"[{mark}] {key:20s} {method:4s} {path}  (scope={scope})")
+    return 0
+
+
+def cmd_token(_):
+    from nworks.auth import get_token
+    tok = get_token(["directory.read"])
+    print(f"[ok] SA 토큰 발급 성공 (길이 {len(tok)})")
+    return 0
+
+
+def cmd_users(_):
+    from nworks.client import NworksClient
+    from nworks.domains import directory_users
+    c = NworksClient()
+    for i, u in enumerate(directory_users(c)):
+        print(u.get("userId"), u.get("userName"))
+        if i >= 20:
+            print("… (20명까지만 표시)")
+            break
+    print(f"rateLimit-remaining={c.last_rate_remaining}")
+    return 0
+
+
+def cmd_bot_send(a):
+    from nworks.client import NworksClient
+    from nworks.config import load_config
+    from nworks.domains import bot_send_text
+    cfg = load_config()
+    bot_id = a.bot or cfg.get("bot_id")
+    if not bot_id:
+        print("[!!] bot_id 필요 (config.json 또는 --bot)")
+        return 1
+    bot_send_text(NworksClient(), bot_id, a.text, user_id=a.user, channel_id=a.channel)
+    print("[ok] 발송 완료")
+    return 0
+
+
+def cmd_ua_auth(a):
+    import webbrowser
+    from nworks.ua_auth import build_authorize_url, exchange_code, wait_for_code
+    url, state = build_authorize_url(scope="mail.read")
+    print(f"[1/3] 브라우저에서 {a.account} 로 로그인·동의하세요:\n{url}")
+    webbrowser.open(url)
+    print("[2/3] localhost:8976 콜백 대기 중 (최대 10분)…")
+    code = wait_for_code(state)
+    exchange_code(code, a.account)
+    print(f"[3/3] [ok] {a.account} UA 토큰 저장 완료 (~/.nworks/, RT 90일 자동갱신)")
+    return 0
+
+
+def cmd_mail_folders(a):
+    from nworks.client import NworksClient
+    c = NworksClient(ua_account=a.account)
+    body = c.call("mail.folders", path_params={"user_id": "me"})
+    import json
+    print(json.dumps(body, ensure_ascii=False, indent=1)[:2000])
+    return 0
+
+
+def cmd_mail_pull(a):
+    from pathlib import Path as P
+    sys.path.insert(0, str(P(__file__).parent / "agents"))
+    from mail_collector import collect
+    root = P(__file__).resolve().parents[1] / "output" / "raw_mail"
+    import json
+    from mail_collector import DEPT_ADDRESSES
+    if a.filter == "none":
+        flt = None
+    elif a.filter == "dept":
+        flt = DEPT_ADDRESSES
+    else:
+        flt = frozenset(x.strip().lower() for x in a.filter.split(","))
+    print(json.dumps(collect(a.account, root, max_new=a.max, filter_address=flt),
+                     ensure_ascii=False))
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="nwctl")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("doctor")
+    sub.add_parser("verify")
+    sub.add_parser("token")
+    sub.add_parser("users")
+    b = sub.add_parser("bot-send")
+    b.add_argument("--user"); b.add_argument("--channel"); b.add_argument("--bot")
+    b.add_argument("--text", required=True)
+    for name in ("ua-auth", "mail-folders", "mail-pull"):
+        p = sub.add_parser(name)
+        # 기본 계정은 수집 계정이다. {{OPERATOR_USER}} 였던 것을 2026-09-29 에 바꿨다 — 인자 없이 돌리면
+        # 폐지된 개인계정을 인증·수집하게 되고, 그 코퍼스가 8/12 에 멈춘 채 "최신" 으로 오독됐다.
+        p.add_argument("account", nargs="?", default="{{BOT_ACCOUNT}}")
+        if name == "mail-pull":
+            p.add_argument("--max", type=int, default=200)
+            p.add_argument("--filter", default="dept",
+                           help="'dept'=부서 4주소(기본) / 콤마 목록 / 'none'=전부")
+    a = ap.parse_args()
+    fn = {"doctor": cmd_doctor, "verify": cmd_verify, "token": cmd_token,
+          "users": cmd_users, "bot-send": cmd_bot_send, "ua-auth": cmd_ua_auth,
+          "mail-folders": cmd_mail_folders, "mail-pull": cmd_mail_pull}[a.cmd]
+    sys.exit(fn(a))
+
+
+if __name__ == "__main__":
+    main()
