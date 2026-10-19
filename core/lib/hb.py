@@ -82,7 +82,7 @@ def partial(name: str, targets: dict, cursor: dict | None = None, **kw) -> Path:
 
 def no_evidence(name: str, reason: str) -> Path:
     """계측 실패(로그 파싱 불가) — **서비스 실패와 다르다**.
-    서비스는 정상인데 우리 어댑터가 증거를 못 읽은 경우다 (codexx 교차검증 B③).
+    서비스는 정상인데 우리 어댑터가 증거를 못 읽은 경우다 (교차검증 B③).
     """
     p = _base(name, "no_evidence")
     p["reason"] = str(reason)[:500]

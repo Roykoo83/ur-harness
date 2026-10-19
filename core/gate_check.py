@@ -300,7 +300,7 @@ def main() -> int:
     f = [x for x in R if x["result"] == "FAIL"]
     b = [x for x in R if x["result"] == "BLOCKED"]
     print(f"\n판정: 통과 {len(R)-len(f)-len(b)} · 실패 {len(f)} · 차단 {len(b)} / 총 {len(R)}")
-    # 종료코드 계약 (codexx 교차검증 C 지적 — BLOCKED 인데 exit 0 이던 모순)
+    # 종료코드 계약 (교차검증 C 지적 — BLOCKED 인데 exit 0 이던 모순)
     #   0 = 전항 통과   1 = 실패 있음   2 = 실패 없으나 차단 있음(미완)
     if f:
         print("  exit 1 — 실패 항목 있음")
