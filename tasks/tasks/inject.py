@@ -318,7 +318,7 @@ def questions_card(today: dt.date) -> str:
     return (f'<div class="card wide"><div class="card-head">'
             f'<div style="flex:1 1 auto"><div class="id">성장 질문</div>'
             f'<h4>애매한 맥락 {len(open_qs)}건{more}: 답하면 규칙이 됩니다</h4>'
-            f'<div class="meta">답변: claudex 세션 또는 부서방에서 · 기록은 learn.py</div></div>'
+            f'<div class="meta">답변: AI 세션 또는 부서방에서 · 기록은 learn.py</div></div>'
             f'<span class="chip">Q {len(open_qs)}</span></div>'
             f'<div class="block"><ul class="items">{"".join(lis)}</ul></div></div>')
 

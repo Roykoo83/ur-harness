@@ -7,7 +7,7 @@
     works.py brief <키워드>            복귀 브리핑 (어디까지 진행됐는지)
     works.py bootstrap <키워드>        진입점 CLAUDE.md 2종을 실제 상태로 채워 생성
     works.py desktop <키워드>          Claude Desktop 프로젝트 세팅 묶음 (B-1)
-    works.py open <slug> [--title T]  cmux 워크스페이스 생성 + claudex 기동
+    works.py open <slug> [--title T]  작업 폴더 준비 (+ 설정된 작업창 열기)
 
 신규 과제 개설은 `new-project.py` 소관이다. 여기서 중복 구현하지 않는다.
 SSOT·U드라이브는 읽기 전용으로만 접근한다 (stat 우선, 본문 읽기는 실패 허용).
@@ -518,26 +518,65 @@ def cmd_open(args: argparse.Namespace) -> int:
         print("주의: 연결된 작업공간이 없습니다. 초안 작업 전 new-project.py 로 개설하세요.",
               file=sys.stderr)
     title = args.title or r["title"]
-    cmd = ["cmux", "new-workspace", "--name", title, "--cwd", str(ssot),
-           "--command", "claudex -c || claudex"]
+
+    # 작업창을 여는 방법은 사람마다 다르다 — 터미널 멀티플렉서를 쓰는 사람도 있고,
+    # 데스크톱 앱에서 폴더를 여는 사람도 있다. 그래서 **기본값을 두지 않고**
+    # 설정에 있을 때만 그 명령을 부른다. 없으면 열 폴더를 알려 준다.
+    #   harness.yaml:
+    #     workspace:
+    #       open_command: "<내 도구> --name {title} --cwd {path}"
+    opener = _open_command()
+
     if args.dry_run:
         if make_cfg:
-            print(f"[만들 예정] {cfg} (repo 역링크)")
-        print(" ".join(f'"{c}"' if " " in c else c for c in cmd))
+            print(f"[만들 예정] {cfg} (저장소 역링크)")
+        if opener:
+            print(" ".join(opener).format(title=title, path=str(ssot)))
+        else:
+            print(f"[열 폴더] {ssot}")
         return 0
+
     if make_cfg:
         cfg.parent.mkdir(exist_ok=True)
         cfg.write_text(json.dumps(
             {"permissions": {"additionalDirectories": [str(REPO)]}},
             ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(f"[생성] {cfg} (repo 역링크)")
+        print(f"[생성] {cfg} (저장소 역링크)")
+
+    if not opener:
+        print(f"\n이 폴더를 AI 클라이언트에서 엽니다:\n  {ssot}\n")
+        print("  · 데스크톱 앱: Code 탭 → 그 폴더 열기")
+        print("  · 터미널: 그 폴더로 이동한 뒤 실행")
+        print("\n자동으로 열고 싶으면 harness.yaml 의 workspace.open_command 를 채웁니다.")
+        return 0
+
+    cmd = [c.format(title=title, path=str(ssot)) for c in opener]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as e:
-        print(f"cmux 호출 실패: {e}", file=sys.stderr)
+        # 열지 못한 것을 성공으로 치지 않는다. 폴더 경로는 알려 준다
+        print(f"작업창 열기 실패: {e}", file=sys.stderr)
+        print(f"이 폴더를 직접 엽니다: {ssot}", file=sys.stderr)
         return 1
     print((out.stdout or out.stderr).strip())
     return out.returncode
+
+
+def _open_command() -> list[str] | None:
+    """작업창을 여는 명령. 설정에 없으면 None — 기본값을 두지 않는다.
+
+    `{title}` 과 `{path}` 자리표시자를 쓴다.
+    """
+    try:
+        import shlex                                          # noqa: PLC0415
+        import sys as _s                                      # noqa: PLC0415
+        from pathlib import Path as _P                        # noqa: PLC0415
+        _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+        from lib.config import cfg as _cfg                    # noqa: PLC0415
+        v = _cfg("workspace.open_command")
+        return shlex.split(v) if v else None
+    except Exception:                                         # noqa: BLE001
+        return None
 
 
 def main() -> int:
@@ -558,7 +597,7 @@ def main() -> int:
     d = sub.add_parser("desktop", help="Claude Desktop 프로젝트 세팅 묶음 (B-1)")
     d.add_argument("keyword", help="과제명 조각 또는 작업공간 slug")
 
-    o = sub.add_parser("open", help="cmux 워크스페이스 생성(SSOT 루트) + claudex 기동")
+    o = sub.add_parser("open", help="작업 폴더 준비 (SSOT 루트) + 설정된 작업창 열기")
     o.add_argument("slug", help="과제명 조각 또는 작업공간 slug")
     o.add_argument("--title", help="워크스페이스 표시 이름")
     o.add_argument("--dry-run", action="store_true")

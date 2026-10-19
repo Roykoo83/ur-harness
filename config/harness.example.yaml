@@ -110,3 +110,9 @@ access:
 install:
   python: ""                   # 예: /usr/bin/python3  (Linux·macOS)
   python_windows: ""           # 예: C:\\Python312\\pythonw.exe  (콘솔 창 없이 실행)
+
+# workspace — 작업창을 여는 방법. 비우면 열 폴더만 알려 준다.
+#   사람마다 쓰는 도구가 다르므로 기본값을 두지 않는다.
+#   `{title}` · `{path}` 를 쓸 수 있다. 참고: 참고/개인_운영환경_패턴.md
+workspace:
+  open_command: ""

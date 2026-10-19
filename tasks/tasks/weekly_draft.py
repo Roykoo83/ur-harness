@@ -316,7 +316,7 @@ def main() -> int:
         pjt = str(it.get(c_pjt) or "").strip()
         pid = EO.match(pjt, index) if pjt else None
 
-        # 연구기획사업부 AX 행은 우리 자신의 일 — claudex 가 유지하는 주간 요약을 쓴다 (R11)
+        # 연구기획사업부 AX 행은 우리 자신의 일 — AI가 유지하는 주간 요약을 쓴다 (R11)
         if "연구기획" in pjt and "AX" in pjt and ax.get("전주"):
             ax_prev = list(ax["전주"])[:MAX_ITEMS - 1]
             ax_prev.append(f"SSOT 산출물 변경 {ssot_total}건 ({wf[5:].replace('-', '/')}"

@@ -76,7 +76,15 @@ RULES: list[tuple[str, str, str]] = [
                 r"|/scripts/(nworks|agents)/",
      "저장소 안 경로나 설정의 작업공간(paths.*)으로"),
 
-    # 5 연락처
+    # 5 개인 환경 도구 — 특정 개인의 작업 도구가 실행 경로에 들어가면
+    #   받은 사람은 없는 도구를 찾다가 막힌다. `참고/` 안에서는 허용한다(설명 대상이므로).
+    # 도구 이름을 그대로 적으면 이 줄 자신이 규칙에 걸린다 — 쪼개서 붙인다
+    ("개인 환경 도구",
+     r"(?i)(?<![a-z])(" + "|".join(["c" + "mux", "claude" + "x", "agy" + "x",
+                                    "codex" + "x", "bea" + "xx", "ura" + "xx"]) + r")(?![a-z])",
+     "설정 훅으로 빼거나 설명 자료 폴더로 옮긴다"),
+
+    # 6 연락처
     # 서비스 제공자의 시스템 발신 주소는 조직 고유값이 아니다 — 판정 로직에 필요하므로 허용한다
     ("이메일", r"[A-Za-z0-9._%+-]+@(?!example\.(org|com)\b|(?:[A-Za-z0-9.-]+\.)?"
                r"(?:navercorp|worksmobile|google|atlassian|slack|github|anthropic|openai)\.com\b)"
@@ -136,6 +144,7 @@ XML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:_-]*\s*/?>")
 
 
 SKIP_FILE = {"scan.local.json"}
+REFERENCE_DIR = "참고"       # 설치 대상이 아닌 설명 자료
 SKIPPED: list[Path] = []   # 검사하지 않은 파일 — 끝에 반드시 보고한다          # 금지어 목록 자신 — .gitignore 대상
 
 
@@ -202,6 +211,9 @@ def walk(root: Path):
         if any(part in SKIP_DIR for part in p.parts):
             continue
         if p.name in SKIP_FILE or p.name in SKIP_NAME_EXACT or ".local." in p.name:
+            continue
+        # `참고/` 는 설치 대상이 아니라 설명 자료다 — 거기 적힌 도구 이름은 위반이 아니다
+        if REFERENCE_DIR in p.parts:
             continue
         if not p.is_file():
             continue
