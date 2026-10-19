@@ -133,10 +133,20 @@ FILTER_CFG = PROJ / "config" / "brief_filter.json"
 
 
 def _load_filter() -> dict:
+    """판정 규칙을 읽는다. **규칙을 소유하는 파일은 이것 하나다.**
+
+    없으면 거르지 않고 전부 통과시킨다 — 조용히 0건이 되는 것보다 낫다.
+    대신 **없다는 사실과 어디서 시작하면 되는지**를 로그에 남긴다.
+    """
+    if not FILTER_CFG.is_file():
+        example = FILTER_CFG.with_name("brief_filter.example.json")
+        log(f"판정 규칙이 없다 — 거르지 않고 전부 통과시킨다. "
+            f"시작하려면 {example.name} 을 {FILTER_CFG.name} 으로 복사해 채운다")
+        return {}
     try:
         return json.loads(FILTER_CFG.read_text(encoding="utf-8"))
-    except Exception as e:
-        log(f"브리핑 필터 규칙 로드 실패(필터 없이 진행): {str(e)[:100]}")
+    except Exception as e:                                   # noqa: BLE001
+        log(f"판정 규칙을 읽지 못했다(거르지 않고 진행): {str(e)[:100]}")
         return {}
 
 
