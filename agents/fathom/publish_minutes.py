@@ -5,7 +5,7 @@
 
 **마크다운 원본과 컨플루언스 게시본은 범위가 다르다.**
 `향후 일정`은 우리 태스크 원장이 읽는 절이라 원본에는 반드시 남겨야 하지만,
-전사 공유본에는 담당·기한이 붙은 내부 추적표까지 올릴 필요가 없다(Roy 지시 2026-08-25).
+전사 공유본에는 담당·기한이 붙은 내부 추적표까지 올릴 필요가 없다(운영자 지시 2026-08-25).
 그래서 **원본은 건드리지 않고 게시할 때만 걷어낸다.**
 
 교체 경계는 `📝 회의록` 제목이다. HTML 주석 표식은 컨플루언스 편집기가 저장할 때
@@ -19,7 +19,7 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO / "projects/urban-weekly-dashboard/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
 sys.path.insert(0, str(HERE))   # md2conf 는 이 폴더에 있다 (2026-09-08: /tmp 에 두어 유실됐던 것을 이설)
 
 # 컨플루언스 게시본에서 뺄 절 (제목으로 지정)

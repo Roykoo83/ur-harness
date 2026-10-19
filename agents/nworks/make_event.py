@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 PROJ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJ / "scripts"))
+sys.path.insert(0, str(PROJ / "agents"))
 from nworks.client import NworksClient  # noqa: E402
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Roy의 답을 지식으로 기록한다 (성장 루틴의 닫는 반쪽).
+"""운영자의 답을 지식으로 기록한다 (성장 루틴의 닫는 반쪽).
 
     python3 scripts/tasks/learn.py list
     python3 scripts/tasks/learn.py answer --q Q-xxxxxxxx --say "답 내용"
@@ -76,7 +76,7 @@ def cmd_answer(a) -> int:
         f.write(f"\n### {hit['qid']} ({dt.date.today()}) — "
                 f"{'기각' if a.mode == 'dismiss' else '답변'}\n"
                 f"- 질문[{hit['type']}]: {hit['text'][:160]}\n"
-                f"- Roy: {a.say or '(기록 없음)'}\n")
+                f"- 운영자: {a.say or '(기록 없음)'}\n")
         for x in applied:
             f.write(f"- 적용: {x}\n")
 

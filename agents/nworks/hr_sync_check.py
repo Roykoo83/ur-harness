@@ -8,6 +8,7 @@ Sources
   - HR events             : 경영관리부 주간업무보고 (입사/퇴사 lines)
 Writes one dated report under 00_공통/50_온톨로지/_점검/.
 """
+from pathlib import Path
 import os
 import re
 import subprocess
@@ -19,7 +20,7 @@ SSOT = "{{MOUNT_ROOT}}/공유 드라이브/{{SSOT_DRIVE}}"
 PEOPLE = f"{SSOT}/00_공통/50_온톨로지/사람"
 ARCHIVE = f"{SSOT}/90_보관/컨플루언스_아카이브"
 OUT_DIR = f"{SSOT}/00_공통/50_온톨로지/_점검"
-NWCTL = "{{HOME}}/{{WORKSPACE_NAME}}/projects/nworks-agent/scripts/nwctl"
+NWCTL = str(Path(__file__).resolve().parent / "nwctl")
 
 
 def nfc(s):

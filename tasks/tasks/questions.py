@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""애매한 맥락 → Roy 질문 (성장 루틴, Roy 지시 2026-08-31).
+"""애매한 맥락 → 운영자 질문 (성장 루틴, 운영자 지시 2026-08-31).
 
     python3 scripts/tasks/questions.py
 

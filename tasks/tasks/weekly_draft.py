@@ -3,7 +3,7 @@
 
     python3 scripts/tasks/weekly_draft.py
 
-칸의 의미 (Roy 정정 2026-08-31):
+칸의 의미 (운영자 정정 2026-08-31):
     전주 실적 = **직전 보고서의 「금주 계획」 중 실제 수행된 것** + 추가로 수행된 것.
                수행 여부는 원장 완료 기록·메신저·메일의 완료 신호로 판정한다.
     금주 계획 = 보고일(화)부터 차주 월요일까지의 일: 기한이 이 창에 있는 태스크
@@ -27,7 +27,7 @@ import extract as E            # noqa: E402
 import extract_observed as EO  # noqa: E402
 
 PROJ = Path(__file__).resolve().parents[2]
-WEEKLY = PROJ.parents[1] / "projects" / "urban-weekly-dashboard" / "data" / "parsed"
+WEEKLY = _weekly_dir("parsed")
 OUT = PROJ / "data" / "tasks" / "weekly_draft.json"
 MAX_ITEMS = 5
 
@@ -35,6 +35,15 @@ MAX_ITEMS = 5
 DONE_HINT = re.compile(
     r"완료|보완\s*완|제출(?!\s*예정|\s*마감|마감)|발송|수령|접수|회신|처리했|처리됨|집행했|납부|"
     r"승인(?!\s*대기|\s*요청)|등록했|업로드|전달했|마쳤|끝냈|받았습니다|확인했")
+
+
+
+def _weekly_dir(sub: str = "") -> Path:
+    """주간보고 데이터 경로 — 설정의 작업공간 아래. 코드 경로와 섞지 않는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    return paths.weekly / sub if sub else paths.weekly
 
 
 def _core(s: str) -> str:
@@ -51,7 +60,7 @@ def _sim(a: str, b: str) -> float:
 def clean(s: str) -> str:
     """보고서 문장으로 다듬는다 — 메일 접두([FW]·RE:)와 호출(@이름)은 소음이다.
 
-    em dash 는 산출물에 쓰지 않는다 (Roy 문체 규칙 2026-08-31) — 콜론으로 바꾼다.
+    em dash 는 산출물에 쓰지 않는다 (운영자 문체 규칙 2026-08-31) — 콜론으로 바꾼다.
     """
     s = re.sub(r"^(?:\[?(?:re|fw|fwd|답장|전달)\]?\s*[:：]?\s*)+", "", s, flags=re.I)
     s = re.sub(r"^@\S+\s*(?:책임님|리더님|대표님|님)?,?\s*", "", s)
@@ -60,7 +69,7 @@ def clean(s: str) -> str:
 
 
 def briefly(s: str) -> str:
-    """개괄식 — 보고서는 서술형 문장이 아니라 명사구다 (Roy 2026-09-01 #0)."""
+    """개괄식 — 보고서는 서술형 문장이 아니라 명사구다 (운영자 2026-09-01 #0)."""
     s = clean(s)
     s = re.sub(r"\s*(입니다|합니다|했습니다|됩니다|되었습니다|드립니다|하겠습니다|바랍니다|"
                r"해야\s*(합니다|해요|되네요|한다|하고)|주세요|이에요|예요|네요|습니다|했고|하고|"
@@ -217,7 +226,7 @@ def week_evidence(index, tasks, wf: str, wt: str) -> dict[str, list[str]]:
 def ssot_changes(index, wf: str, wt: str):
     """SSOT 부서 트리의 창 안 파일 변경 — 과제별 (파일들, 건수) + 부서 총계.
 
-    부서는 SSOT 로 산출물을 만든다 (Roy 2026-09-01 #11) — 여기 변동이 곧 한 주의 일이다.
+    부서는 SSOT 로 산출물을 만든다 (운영자 2026-09-01 #11) — 여기 변동이 곧 한 주의 일이다.
     """
     base = EO.SSOT / "{{DEPT_ROOT}}"
     per: dict[str, list[str]] = defaultdict(list)
@@ -275,7 +284,7 @@ def main() -> int:
                 rpt = ov
         except (ValueError, KeyError):
             pass
-    # 전주 창 = 직전 보고일 ~ 회의 전날 (Roy 2026-09-01: "8/25~8/31 변동사항 모두")
+    # 전주 창 = 직전 보고일 ~ 회의 전날 (운영자 2026-09-01: "8/25~8/31 변동사항 모두")
     plan_to = (rpt + dt.timedelta(days=6)).isoformat()
     wk = latest_weekly(before=(rpt - dt.timedelta(days=4)).isoformat())
     if not wk:
@@ -342,7 +351,7 @@ def main() -> int:
         if prof.get("전주완료"):      # 사람이 "지난주 전량 완료"라고 확언한 과제
             done_lines += carry_lines
             carry_lines = []
-        # 프로필의 단계(사람이 준 현황)가 첫 줄 — 기계 증거는 뒤에 (Roy 브리핑이 정본)
+        # 프로필의 단계(사람이 준 현황)가 첫 줄 — 기계 증거는 뒤에 (운영자 브리핑이 정본)
         head_lines = ([prof["단계"]] if prof.get("단계") else []) + \
             [briefly(x) for x in prof.get("전주", [])]
         n_files = (len(ssot_per.get(pid or "", [])) if pid else 0) + drive_n.get(pid or "", 0)
@@ -363,7 +372,7 @@ def main() -> int:
         # --- 금주 계획: 기한이 이번 창인 것 > 못 끝낸 지난주 계획(지속) > 지난주 새 요청
         due_items = [t for t in mine if t["state"] in ("planned", "doing")
                      and rpt.isoformat() <= str(t.get("due") or "")[:10] <= plan_to]
-        # 채팅·메일 원문은 보고서 계획 칸에 싣지 않는다 (Roy 2026-09-01: 개괄식, 계획 기반).
+        # 채팅·메일 원문은 보고서 계획 칸에 싣지 않는다 (운영자 2026-09-01: 개괄식, 계획 기반).
         # 그런 항목은 대시보드 §01이 담는다. 공식 문서 유래(주간보고·회의록·정정)만 계획이 된다.
         fresh = [t for t in mine if t["state"] in ("planned", "doing")
                  and not t.get("due") and not t.get("needs_check")

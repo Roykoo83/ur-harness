@@ -1,9 +1,9 @@
 #!/bin/bash
 # 주간 컨플루언스 수집 → 부서별 대시보드 생성.
-# launchd `com.urban.weekly-dashboard` 가 매주 화요일 09:30에 호출한다.
+# launchd `com.{{ORG_NAME}}.weekly-dashboard` 가 매주 화요일 09:30에 호출한다.
 set -uo pipefail
 
-PROJ="$HOME/{{WORKSPACE_NAME}}/projects/urban-weekly-dashboard"
+PROJ="$(cd "$(dirname "$0")/../.." && pwd)"   # 저장소 루트 — 코드는 여기 있다
 LOG="$PROJ/workspace/weekly.log"
 PY="${PYTHON_BIN:-$HOME/miniconda3/bin/python3}"
 command -v "$PY" >/dev/null 2>&1 || PY=python3
@@ -24,7 +24,7 @@ try:
         left = (dt.date.fromisoformat(exp) - dt.date.today()).days
         if left <= 30:
             print(f"!! Atlassian 토큰 만료 {left}일 남음 ({exp}) — 갱신 절차 R2 "
-                  f"(urban-weekly-dashboard/design/아틀라시안_토큰_자가갱신_설계.md)")
+                  f"(docs/06_운영과_장애대응.md)")
 except Exception:
     pass
 PYEOF
@@ -68,7 +68,7 @@ if ! "$PY" "$PROJ/scripts/build_dashboards.py" >> "$LOG" 2>&1; then
 fi
 
 # 3) RPBD 운영 OS 대시보드도 같은 사이클에서 최신화 (SSOT 파이프라인)
-RPBD="$HOME/{{WORKSPACE_NAME}}/projects/rpbd-infra"
+RPBD="$(cd "$(dirname "$0")/../.." && pwd)"   # 저장소 루트
 if [ -f "$RPBD/src/rpbd/pipeline.py" ]; then
   (cd "$RPBD" && PYTHONPATH="$RPBD/src" "$PY" -m rpbd.pipeline >> "$LOG" 2>&1) \
     && log "RPBD 파이프라인 갱신 완료" \

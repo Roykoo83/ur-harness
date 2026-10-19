@@ -54,10 +54,10 @@ def ssot_candidates() -> list[Path]:
 def find_ssot() -> Path:
     """SSOT 마운트를 찾는다.
 
-    순서: 환경변수 `URBAN_AX_SSOT` >> OS 별 후보 경로.
+    순서: 환경변수 `UR_SSOT` >> OS 별 후보 경로.
     못 찾으면 마지막 후보를 그대로 돌려주고, 호출부가 `is_dir()` 로 걸러 안내한다.
     """
-    env = os.environ.get("URBAN_AX_SSOT")
+    env = os.environ.get("UR_SSOT")
     if env:
         return Path(env)
     cands = ssot_candidates()
@@ -78,17 +78,17 @@ def ssot_help(found: Path) -> str:
             "  확인할 것: ①구글 드라이브(데스크톱용)가 실행 중인지",
             "            ②파일 탐색기에서 `G:` 같은 드라이브에 `공유 드라이브` 가 보이는지",
             "  경로가 다르면 (PowerShell):",
-            '    $env:URBAN_AX_SSOT="G:\\공유 드라이브\\{{SSOT_DRIVE}}"',
+            '    $env:UR_SSOT="G:\\공유 드라이브\\{{SSOT_DRIVE}}"',
         ]
     else:
         lines += [
             "  확인할 것: ①구글 드라이브 데스크톱 앱이 켜져 있는지",
             "            ②`공유 드라이브/{{SSOT_DRIVE}}` 가 보이는지",
-            "  경로가 다르면: URBAN_AX_SSOT='<내 경로>' 를 앞에 붙여 실행하세요",
+            "  경로가 다르면: UR_SSOT='<내 경로>' 를 앞에 붙여 실행하세요",
         ]
     return "\n".join(lines)
 
 
 def repo_base() -> Path:
     """작업공간(repo). 연구기획사업부 담당자 맥에만 있다. 없으면 관련 절이 비워진다."""
-    return Path(os.environ.get("URBAN_AX_REPO", str(Path.home() / "{{WORKSPACE_NAME}}")))
+    return Path(os.environ.get("UR_REPO", str(Path.home() / "{{WORKSPACE_NAME}}")))

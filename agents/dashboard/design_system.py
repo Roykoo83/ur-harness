@@ -1,4 +1,4 @@
-"""Urban Data Lab 대시보드 공통 디자인 시스템.
+"""{{ORG_NAME}} Data Lab 대시보드 공통 디자인 시스템.
 
 RPBD 운영 OS 대시보드(`rpbd-infra/output/rpbd_운영OS_대시보드.html`)와 동일한 토큰을 쓴다.
 값을 바꾸면 양쪽이 함께 바뀌므로, 토큰은 design.md §3.1을 벗어나지 않는다.
@@ -185,7 +185,7 @@ def page(title: str, subtitle: str, stamp: str, tabs: str, body: str,
   <div class="top-in">
     <div class="top-row">
       <div class="brand">{LOGO}
-        <div><div class="sub">Urban Data Lab</div><h1>{subtitle}</h1></div>
+        <div><div class="sub">{{ORG_NAME}} Data Lab</div><h1>{subtitle}</h1></div>
       </div>
       <div class="stamp">{stamp}</div>
     </div>

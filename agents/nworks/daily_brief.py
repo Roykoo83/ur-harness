@@ -1,13 +1,13 @@
 """부서방 정기 브리핑 — 평일(주말·공휴일 제외) 08:00 / 17:00 발송.
 
-Roy 승인 발송 유형 (2026-08-05):
+운영자 승인 발송 유형 (2026-08-05):
 - 아침(08:00): 오늘 일정(담당자별) + 어제(월요일이면 주말 포함) 수신 부서 메일({{BOT_USER}}) 서머리
 - 저녁(17:00): 다음 영업일 일정(담당자별) + 오늘 수신 부서 메일({{BOT_USER}}) 서머리
 
 동작: 공휴일/주말이면 침묵 종료 → 수집 사이클 선실행(최신화) → 브리핑 구성 →
      부서방(dept_channel_id)으로 발송 (2,000자 한도 분할)
 메일 서머리는 hermes 원샷(3분 제한) — 실패 시 제목 목록으로 폴백.
-launchd: com.urban.nworks-brief (모드는 실행 시각으로 자동 판별, 인자로 강제 가능)
+launchd: com.{{ORG_NAME}}.nworks-brief (모드는 실행 시각으로 자동 판별, 인자로 강제 가능)
 """
 import datetime
 import json
@@ -20,7 +20,7 @@ from pathlib import Path
 import holidays
 
 PROJ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJ / "scripts"))
+sys.path.insert(0, str(PROJ / "agents"))
 from nworks.client import NworksClient  # noqa: E402
 from nworks.config import load_config  # noqa: E402
 from nworks.domains import bot_send_text  # noqa: E402
@@ -28,6 +28,16 @@ from nworks.domains import bot_send_text  # noqa: E402
 LOG = PROJ / "workspace" / "daily_brief.log"
 KR_HOLIDAYS = holidays.KR(years=range(2026, 2028))
 WEEKDAY_KO = "월화수목금토일"
+
+
+
+def _identity():
+    """신원 해석기 — 사람 목록·ID 는 설정과 조직도에서 읽는다 (코드에 박지 않는다)."""
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib import identity                                     # noqa: PLC0415
+    return identity
 
 
 def _zero_label() -> str:
@@ -78,8 +88,7 @@ def prev_business_day(d: datetime.date) -> datetime.date:
 
 
 def _targets() -> list:
-    cfg = json.loads((PROJ / "scripts" / "calendar_targets.json").read_text())
-    return cfg["targets"]
+    return _identity().targets("calendar")
 
 
 def calendar_for_day(day: datetime.date) -> dict:
@@ -106,7 +115,7 @@ def calendar_for_day(day: datetime.date) -> dict:
     return out
 
 
-# Roy 방침(2026-08-12): 브리핑은 업무 진행 내용만 — 금액·액수는 싣지 않는다.
+# 운영자 방침(2026-08-12): 브리핑은 업무 진행 내용만 — 금액·액수는 싣지 않는다.
 # 통화 기호/단위가 붙은 수치만 치환한다 (날짜·전화번호 오탐 방지).
 AMOUNT_RE = re.compile(
     r"(?:₩|＄|\$|USD|KRW)\s*[0-9][0-9,.]*"
@@ -117,7 +126,7 @@ def redact_amounts(text: str) -> str:
     return AMOUNT_RE.sub("(금액 제외)", text or "")
 
 
-# Roy 방침(2026-08-13): 시스템 자동알림·중복·테스트는 브리핑에 싣지 않는다.
+# 운영자 방침(2026-08-13): 시스템 자동알림·중복·테스트는 브리핑에 싣지 않는다.
 # 규칙은 config/brief_filter.json 이 소유한다 — 여기 코드는 규칙을 해석만 한다.
 # 수집 자체는 막지 않는다. 브리핑에서만 뺀다(삭제는 되돌릴 수 없다).
 FILTER_CFG = PROJ / "config" / "brief_filter.json"
@@ -315,7 +324,7 @@ def compose(mode: str, today: datetime.date) -> str:
         mail_label = "오늘"
 
     cal = calendar_for_day(cal_day)
-    lines = [f"[Urban AX 브리핑] {cal_label} 일정"]
+    lines = [f"[{{ORG_NAME}} AX 브리핑] {cal_label} 일정"]
     if cal:
         for name, items in cal.items():
             lines.append(f"\n▷ {name}")

@@ -3,9 +3,9 @@
 흐름: NAVER WORKS Callback(POST) → 서명 검증(Bot Secret HMAC-SHA256, X-WORKS-Signature)
      → 발신자 정책 → `hermes -z` 원샷 → bot send API 회신
 
-정책 (Roy 확정 2026-08-04):
+정책 (운영자 확정 2026-08-04):
 - 화이트리스트: calendar_targets.json의 5인만 (그 외 무응답)
-- Roy({{OPERATOR_USER}}@)만 전체 권한. 나머지는 읽기 전용 — 프롬프트에 조회·요약 제약 명시
+- 운영자({{OPERATOR_USER}}@)만 전체 권한. 나머지는 읽기 전용 — 프롬프트에 조회·요약 제약 명시
 - Hermes 승인 3종(파괴적 변경·외부 전송·비용 발생) 규약은 Hermes 쪽 그대로 유지
 
 Run: python3 nworks_hermes_bridge.py  (port 8977; cloudflared tunnel이 전면)
@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 PROJ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJ / "scripts"))
+sys.path.insert(0, str(PROJ / "agents"))
 from nworks.client import NworksClient  # noqa: E402
 from nworks.config import load_config  # noqa: E402
 from nworks.domains import bot_send_text  # noqa: E402
@@ -37,12 +37,12 @@ READONLY_PREFIX = (
     "파일 생성·수정·삭제, 셸 명령 실행, 외부 전송, 비용 발생 작업은 금지다.\n"
     "[데이터 원천: 아래 경로를 직접 읽어라. 없으면 없다고 답하고 추측하지 마라]\n"
     "1. 태스크 원장(무엇이 진행·막힘·완료인지의 정본): "
-    "'{{HOME}}/{{WORKSPACE_NAME}}/projects/rpbd-infra/data/tasks/ledger.jsonl' "
+    "'{{HOME}}/{{WORKSPACE_NAME}}-work/tasks/ledger.jsonl' "
     "각 줄이 JSON. state=planned|doing|blocked|done, title·owner·due·issue 필드. "
     "'막힌 것'을 물으면 state=blocked를, '완료'를 물으면 state=done을 근거로 답하라.\n"
-    "2. 일정: '{{HOME}}/{{WORKSPACE_NAME}}/projects/nworks-agent/output/stage/calendar/YYYY-MM.md'\n"
+    "2. 일정: '{{HOME}}/{{WORKSPACE_NAME}}-work/stage/calendar/YYYY-MM.md'\n"
     "3. 메일: '.../output/stage/mail_{{BOT_USER}}/YYYY-MM/' (현행 rbp-) 와 "
-    "'.../output/stage/mail_{{OPERATOR_USER}}/YYYY-MM/' (2026-06~08/12 과거분 roy-). 둘이 한 코퍼스다. "
+    "'.../output/stage/mail_{{OPERATOR_USER}}/YYYY-MM/' (2026-06~08/12 과거분 운영자-). 둘이 한 코퍼스다. "
     "업무 무관(시스템 알림·마케팅·중복) 여부는 '.../output/stage/mail_대장.tsv' 의 promote 열로 판정하라\n"
     "4. 부서 대화: '.../output/stage/messenger/<방>/YYYY-MM.md' (dept·과제예산·AX_TF)\n"
     "5. 확정 문서(과제·예산·인허가): "
@@ -54,16 +54,16 @@ READONLY_PREFIX = (
     "타 부서·개인에 등급·순위·평가를 붙이지 않는다.\n"
     "[열람 범위] 이 답변은 대표와 부서원이 함께 있는 방에 그대로 노출될 수 있다.\n\n질문: ")
 
-ROY_PREFIX = (
-    "[네이버웍스 창구 - Roy 본인 요청]\n"
+OPERATOR_PREFIX = (
+    "[네이버웍스 창구 - 운영자 본인 요청]\n"
     "[데이터 원천: 아래 경로를 직접 읽어라. 없으면 없다고 답하고 추측하지 마라]\n"
     "1. 태스크 원장(무엇이 진행·막힘·완료인지의 정본): "
-    "'{{HOME}}/{{WORKSPACE_NAME}}/projects/rpbd-infra/data/tasks/ledger.jsonl' "
+    "'{{HOME}}/{{WORKSPACE_NAME}}-work/tasks/ledger.jsonl' "
     "각 줄이 JSON. state=planned|doing|blocked|done, title·owner·due·issue 필드. "
     "'막힌 것'을 물으면 state=blocked를, '완료'를 물으면 state=done을 근거로 답하라.\n"
-    "2. 일정: '{{HOME}}/{{WORKSPACE_NAME}}/projects/nworks-agent/output/stage/calendar/YYYY-MM.md'\n"
+    "2. 일정: '{{HOME}}/{{WORKSPACE_NAME}}-work/stage/calendar/YYYY-MM.md'\n"
     "3. 메일: '.../output/stage/mail_{{BOT_USER}}/YYYY-MM/' (현행 rbp-) 와 "
-    "'.../output/stage/mail_{{OPERATOR_USER}}/YYYY-MM/' (2026-06~08/12 과거분 roy-). 둘이 한 코퍼스다. "
+    "'.../output/stage/mail_{{OPERATOR_USER}}/YYYY-MM/' (2026-06~08/12 과거분 운영자-). 둘이 한 코퍼스다. "
     "업무 무관(시스템 알림·마케팅·중복) 여부는 '.../output/stage/mail_대장.tsv' 의 promote 열로 판정하라\n"
     "4. 부서 대화: '.../output/stage/messenger/<방>/YYYY-MM.md' (dept·과제예산·AX_TF)\n"
     "5. 확정 문서(과제·예산·인허가): "
@@ -80,9 +80,19 @@ def _log(msg: str) -> None:
         f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
 
 
+
+def _identity():
+    """신원 해석기 — 사람 목록·ID 는 설정과 조직도에서 읽는다 (코드에 박지 않는다)."""
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib import identity                                     # noqa: PLC0415
+    return identity
+
+
 def _load_whitelist() -> dict:
-    cfg = json.loads((PROJ / "scripts" / "calendar_targets.json").read_text())
-    return {t["email"].lower(): t["name"] for t in cfg["targets"]}
+    """응답 허용 대상 → {메일: 이름}. 설정 `access.bridge` 가 정본."""
+    return {t["email"]: t["name"] for t in _identity().targets("bridge")}
 
 
 def _resolve_emails(client: NworksClient, user_ids: set) -> dict:
@@ -201,9 +211,9 @@ class Bridge(BaseHTTPRequestHandler):
         # 채널에서는 @멘션일 때만 응답 (잡담 전체에 반응 금지). 1:1은 항상 응답.
         if channel:
             low = text.lower()
-            if "urban ax bot" not in low and not low.startswith(("!ax", "ax봇", "봇아")):
+            if "{{ORG_NAME}} ax bot" not in low and not low.startswith(("!ax", "ax봇", "봇아")):
                 return
-            for m in ("@Urban AX Bot", "urban ax bot", "!ax"):
+            for m in ("@{{ORG_NAME}} AX Bot", "{{ORG_NAME}} ax bot", "!ax"):
                 if text.lower().startswith(m.lower()):
                     text = text[len(m):].strip()
                     break
@@ -218,7 +228,7 @@ class Bridge(BaseHTTPRequestHandler):
             _log(f"비허용 발신 {email or uid} — 무응답")
             return
 
-        prefix = ROY_PREFIX if email in FULL_ACCESS else READONLY_PREFIX
+        prefix = OPERATOR_PREFIX if email in FULL_ACCESS else READONLY_PREFIX
         _log(f"질문({name}{'·전체' if email in FULL_ACCESS else '·읽기전용'}): {text[:80]}")
         try:  # 즉시 수신 확인 — 생성에 1~3분 걸릴 수 있음을 안내
             ack = "질문 확인했습니다. 답변 생성 중입니다… (1~3분)"

@@ -35,6 +35,19 @@ RCLONE_REMOTE = "gdrive,team_drive={{SSOT_DRIVE_ID}}:"   # 폴백용(직접 사�
 RCLONE = shutil.which("rclone") or "/opt/homebrew/bin/rclone"
 
 
+
+def _P(name: str, sub: str = ""):
+    """표준 경로 — 설정이 정한 작업공간 아래. 예전 형제-프로젝트 경로를 대신한다."""
+    import sys as _s
+    from pathlib import Path as _Path
+    _s.path.insert(0, str(_Path(__file__).resolve().parents[1] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    if name == "raw":
+        return paths.raw(sub)
+    v = getattr(paths, name)
+    return (v / sub) if sub else v
+
+
 def cloud_put(src: Path, rel_dst: str) -> bool:
     """SSOT 로 올리고 **해시 대조로 도착까지 검증**한다. 업로드 rc=0 은 도착의 증거가 아니다."""
     import sys as _s
@@ -66,7 +79,7 @@ SKIP = ("_원본.html", "_통합.html", "_draft.html")
 
 BOARDS = [
     {"이름": "RPBD 운영 OS", "폴더": "10_운영OS",
-     "src": REPO / "projects/rpbd-infra/output",
+     "src": _P("output"),
      # 태스크 상세는 대시보드에서 링크로만 들어간다. 같이 올려야 그 링크가 산다.
      "포함": ["rpbd_운영OS_대시보드.html", "태스크_상세.html"],
      "진입": "rpbd_운영OS_대시보드.html",
@@ -262,7 +275,7 @@ def main() -> int:
         "",
         "| 찾는 것 | 실제 위치 |",
         "|---|---|",
-        "| 운영 OS 원본·데이터·생성 스크립트 | `{{WORKSPACE_NAME}}/projects/rpbd-infra` |",
+        "| 운영 OS 원본·데이터·생성 스크립트 | `{{WORKSPACE_NAME}}-work` |",
         "| 정부과제 시스템 소스·빌드 도구 | SSOT `50_도구상자/20_소스/gov-system-manuals` "
         "(담당 {{MEMBER_A}}) |",
         "| 과제별 예산·집행 원본 | `U/2. R&D 사업`, `U/4. R&D 예산_통합` |",

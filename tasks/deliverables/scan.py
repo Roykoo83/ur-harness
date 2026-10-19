@@ -3,7 +3,7 @@
 
     python3 scripts/deliverables/scan.py [--dry] [--force]
 
-평일 17:00 launchd(`com.urban.deliverables-scan`). 주말·공휴일이면 조용히 끝낸다.
+평일 17:00 launchd(`com.{{ORG_NAME}}.deliverables-scan`). 주말·공휴일이면 조용히 끝낸다.
 
 왜 자동 복사를 하지 않나: 발주처에 나간 문서를 기계가 골라 회사 드라이브에 올리는 구조는
 위험이 이득보다 크다. **md5가 U에 없다는 사실은 '올려야 한다'가 아니라 '다른 버전일 수 있다'** 이다
@@ -32,6 +32,23 @@ NW = REPO / "projects" / "nworks-agent"
 
 EXT = set(CFG["확장자"])
 U_DRIVE, SSOT_DRIVE = CFG["drives"]["u"], CFG["drives"]["ssot"]
+
+
+
+def _send_kwargs() -> dict:
+    """수신자 인자 — 설정의 operator.account 로 조직도를 조회해 정한다.
+
+    대상을 못 찾으면 빈 dict 를 돌려주고, 부르는 쪽이 보내지 않는다.
+    사람 ID 를 설정 파일에 적어 두면 담당자가 바뀔 때마다 따라다녀야 한다.
+    """
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib.identity import alert_target                        # noqa: PLC0415
+    tgt = alert_target()
+    if not tgt:
+        return {}
+    return {"user_id": tgt[1]} if tgt[0] == "user" else {"channel_id": tgt[1]}
 
 
 def nfc(s: str) -> str:
@@ -165,7 +182,7 @@ def send(text: str) -> bool:
         from nworks.config import load_config
         from nworks.domains import bot_send_text
         bot_send_text(NworksClient(), load_config()["bot_id"], text,
-                      user_id=CFG["roy_user_id"])
+                      **_send_kwargs())
         return True
     except Exception as e:
         log(f"알림 발송 실패: {str(e)[:160]}")

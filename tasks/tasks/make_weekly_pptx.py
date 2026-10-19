@@ -23,12 +23,21 @@ from pathlib import Path
 from pptx import Presentation
 
 PROJ = Path(__file__).resolve().parents[2]
-ATT = PROJ.parents[1] / "projects" / "urban-weekly-dashboard" / "data" / "attachments"
+ATT = _weekly_dir("attachments")
 DRAFT = PROJ / "data" / "tasks" / "weekly_draft.json"
 OUTDIR = PROJ / "output" / "weekly_draft"
 SSOTDIR = (Path.home() / "{{MOUNT_REL}}"
            / "공유 드라이브" / "{{SSOT_DRIVE}}" / "{{DEPT_ROOT}}" / "00_부서정본"
            / "주간보고_초안")
+
+
+
+def _weekly_dir(sub: str = "") -> Path:
+    """주간보고 데이터 경로 — 설정의 작업공간 아래. 코드 경로와 섞지 않는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    return paths.weekly / sub if sub else paths.weekly
 
 
 def latest_pptx(before: str = "999999") -> Path | None:

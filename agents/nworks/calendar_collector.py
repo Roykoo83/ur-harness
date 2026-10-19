@@ -1,6 +1,6 @@
 """A3 calendar collector — 타깃 구성원(연구기획사업부+대표)의 캘린더를 SA 토큰으로 수집.
 
-대상: scripts/calendar_targets.json (전사 확산 시 Roy가 리스트 교체)
+대상: 설정 `access.calendar` (메일만 적고 이름은 조직도·온톨로지에서 읽는다)
 창: 전월·당월·익월 3개 월 (calendar.events는 커서 없음, 31일 창 제약 → 월 단위 조회)
 
 저장 예외 규약: 캘린더는 원천이 가변(수정·취소)이므로 00_raw/calendar/는
@@ -22,6 +22,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from nworks.auth import get_token  # noqa: E402
 from nworks.client import NworksClient  # noqa: E402
 from nworks.endpoints import API_HOST, V  # noqa: E402
+
+
+
+def _identity():
+    """신원 해석기 — 사람 목록·ID 는 설정과 조직도에서 읽는다 (코드에 박지 않는다)."""
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib import identity                                     # noqa: PLC0415
+    return identity
 
 
 def _month_bounds(y: int, m: int) -> tuple[str, str]:
@@ -56,8 +66,7 @@ def _fetch_month_events(user_id: str, frm: str, until: str) -> list:
 
 
 def collect(project_root: Path, today: date) -> dict:
-    cfg = json.loads((project_root / "scripts" / "calendar_targets.json").read_text())
-    targets = cfg["targets"]
+    targets = _identity().targets("calendar")
     emails = [t["email"].lower() for t in targets]
     name_by_email = {t["email"].lower(): t["name"] for t in targets}
 
@@ -133,7 +142,7 @@ def collect(project_root: Path, today: date) -> dict:
         (stage_root / f"{ym}.md").write_text("\n".join(lines) + "\n")
 
     idx = ["# 캘린더 stage 색인", "",
-           f"대상: {', '.join(t['name'] for t in targets)} (calendar_targets.json)", ""]
+           f"대상: {', '.join(t['name'] for t in targets)} (설정 access.calendar)", ""]
     for ym in sorted(by_month):
         idx.append(f"- [{ym}]({ym}.md) — {len(by_month[ym])}건")
     if recurring:

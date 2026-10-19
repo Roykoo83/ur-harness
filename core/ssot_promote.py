@@ -24,8 +24,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import hb
 
+def _P(name: str, sub: str = ""):
+    """표준 경로 — 설정이 정한 작업공간 아래. 예전 형제-프로젝트 경로를 대신한다."""
+    import sys as _s
+    from pathlib import Path as _Path
+    _s.path.insert(0, str(_Path(__file__).resolve().parents[1] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    if name == "raw":
+        return paths.raw(sub)
+    v = getattr(paths, name)
+    return (v / sub) if sub else v
+
+
 SERVICE = "ssot-promote"
-STAGE = Path.home() / "{{WORKSPACE_NAME}}/projects/nworks-agent/output/stage"
+STAGE = _P("stage")
 REMOTE = "SSOT_rw:"
 TIMEOUT = int(os.environ.get("PROMOTE_TIMEOUT", "300"))  # 전량 재업로드 때는 PROMOTE_TIMEOUT 으로 늘린다
 
@@ -39,7 +51,7 @@ ACCT = re.compile(r"(계좌번호|예금주|통장사본|입금계좌)[^\n]{0,40
 #   {{OPERATOR_USER}}    frozen  received <  T0  563건 고정 (2026-06~08/12). 과거 코퍼스
 TARGETS = [
     ("mail_{{BOT_USER}}", "{{DEPT_ROOT}}/40_커뮤니케이션/메일", "rbp-"),
-    ("mail_{{OPERATOR_USER}}",   "{{DEPT_ROOT}}/40_커뮤니케이션/메일", "roy-"),
+    ("mail_{{OPERATOR_USER}}",   "{{DEPT_ROOT}}/40_커뮤니케이션/메일", "운영자-"),
     ("mail_index",    "{{DEPT_ROOT}}/40_커뮤니케이션/메일", ""),
     ("calendar",      "00_공통/20_일정/naverworks_캘린더",       ""),
     ("messenger",     "{{DEPT_ROOT}}/40_커뮤니케이션/메신저",  ""),
@@ -48,10 +60,12 @@ LIVE_SOURCE = "mail_{{BOT_USER}}"          # 커서가 의미 있는 계열
 LEDGER = STAGE / "mail_대장.tsv"       # mail_curate.py 산출. 메일 승격의 전제조건
 
 
+
+
 def load_ledger() -> dict[str, str] | None:
     """물리키 → 승격 여부(Y/N). 대장이 없으면 None.
 
-    **업무에 필요한 메일만 SSOT 로 보낸다**(Roy 2026-10-01). 그 판정은 여기서 하지 않고
+    **업무에 필요한 메일만 SSOT 로 보낸다**(운영자 2026-10-01). 그 판정은 여기서 하지 않고
     대장이 한다 — 규칙 소유는 `config/brief_filter.json` 하나다. 여기는 집행만 한다.
     """
     if not LEDGER.exists():
@@ -207,8 +221,8 @@ def main() -> int:
 
     targets = {r["source"]: r["status"] for r in results}
     total = sum(r["files"] for r in results)
-    # 커서는 **live 계열만** 본다. frozen(roy-)은 mailId 공간이 달라 섞으면 커서가 오염된다
-    # (roy 최대 778 > rbp 최대 754 — 섞으면 신규 메일을 "이미 본 것"으로 오판한다).
+    # 커서는 **live 계열만** 본다. frozen(운영자-)은 mailId 공간이 달라 섞으면 커서가 오염된다
+    # (운영자 최대 778 > rbp 최대 754 — 섞으면 신규 메일을 "이미 본 것"으로 오판한다).
     max_id = next((r.get("max_id", 0) for r in results if r["source"] == LIVE_SOURCE), 0)
     excl = sum(len(r["excluded"]) for r in results)
     off = sum((r.get("filtered") or {}).get("업무무관", 0) for r in results)

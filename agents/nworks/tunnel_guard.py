@@ -8,9 +8,9 @@
   1) 현재 터널 URL을 로그에서 읽고 외부 도달을 확인
   2) 죽었으면 터널 재시작 → 새 URL 취득
   3) URL이 콘솔 등록값과 다르면 콜백을 **API로** 자동 재등록 (PATCH /bots/{botId})
-  4) 재등록 성공/실패를 Roy에게 1:1로 알림 (실패 시 새 URL을 명시해 30초 수동 대응)
+  4) 재등록 성공/실패를 운영자에게 1:1로 알림 (실패 시 새 URL을 명시해 30초 수동 대응)
 
-launchd: com.urban.nworks-tunnel-guard (600초). 2026-08-25 부터 재등록이 API 경로라
+launchd: com.{{ORG_NAME}}.nworks-tunnel-guard (600초). 2026-08-25 부터 재등록이 API 경로라
 사람 손이 필요 없다 — 그전에는 브라우저를 띄워야 했고 launchd 에는 GUI 세션이 없어
 매번 실패했다. 알림 폴백은 그대로 둔다.
 """
@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 PROJ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJ / "scripts"))
+sys.path.insert(0, str(PROJ / "agents"))
 from nworks.client import NworksClient  # noqa: E402
 from nworks.config import load_config  # noqa: E402
 from nworks.domains import bot_send_text  # noqa: E402
@@ -57,17 +57,41 @@ def current_url() -> str | None:
 
 
 def reachable(url: str) -> bool:
+    # curl + /dev/null 은 윈도우에서 돌지 않는다. 표준 라이브러리로 바꿔
+    # 세 OS 에서 같은 코드가 돌게 한다. 응답 코드가 무엇이든 **응답이 왔다는 것**이 판정 기준이다.
+    import urllib.error                                       # noqa: PLC0415
+    import urllib.request                                     # noqa: PLC0415
     try:
-        r = subprocess.run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-                            "--max-time", "10", url + "/"], capture_output=True, text=True)
-        return r.stdout.strip() not in ("000", "")
-    except Exception:
+        urllib.request.urlopen(url + "/", timeout=10)
+        return True
+    except urllib.error.HTTPError:
+        return True                                           # 4xx·5xx 도 터널은 살아 있다는 뜻
+    except Exception:                                         # noqa: BLE001
         return False
 
 
 def restart_tunnel() -> None:
-    subprocess.run(["launchctl", "kickstart", "-k", "gui/502/com.urban.nworks-tunnel"],
-                   capture_output=True)
+    """터널 서비스를 다시 올린다. 스케줄러는 OS 마다 다르다.
+
+    예전에는 launchd 대상에 **사용자 번호가 박혀 있었다.** 그 번호는 기계마다 다르므로
+    다른 기계에서는 조용히 아무것도 재시작하지 않았다 — 가드가 도는 것처럼 보이면서
+    실제로는 꺼져 있는 상태다. 번호는 실행 중인 사용자에게서 받아 온다.
+    """
+    import os                                                 # noqa: PLC0415
+    import platform                                           # noqa: PLC0415
+    osname = platform.system().lower()
+    label = "ur-tunnel"
+    if osname == "darwin":
+        uid = os.getuid()                                     # 박지 않는다
+        cmd = ["launchctl", "kickstart", "-k", f"gui/{uid}/{label}"]
+    elif osname == "windows":
+        cmd = ["schtasks", "/Run", "/TN", f"UR Harness\\UR-{label}"]
+    else:
+        cmd = ["systemctl", "--user", "restart", f"{label}.service"]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        # 재시작에 실패한 것을 성공으로 치면, 다음 점검에서 또 같은 판단을 반복한다
+        log(f"터널 재시작 실패({r.returncode}): {(r.stderr or '').strip()[:120]}")
     time.sleep(15)
 
 
@@ -94,7 +118,7 @@ def try_reregister(new_url: str) -> bool:
     """
     cb = new_url + "/callback"
     try:
-        sys.path.insert(0, str(PROJ / "scripts"))
+        sys.path.insert(0, str(PROJ / "agents"))
         import requests
         from nworks.auth import get_token
         cfg = load_config()

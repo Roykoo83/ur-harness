@@ -24,7 +24,7 @@ FORBIDDEN_FIELDS = ("birthday", "cellPhone", "privateEmail", "telephone", "locat
 
 # Directory entries that are not people: shared mailboxes, service accounts, vendors.
 _NON_PERSON_MARKERS = (
-    "관리자", "계정", "github", "aws", "msp", "urban_work", "대표 메일",
+    "관리자", "계정", "github", "aws", "msp", "ur_work", "대표 메일",
     "(주)", "주식회사", "it", "admin", "test", "bot",
 )
 
@@ -66,7 +66,7 @@ def is_person(entry: Mapping[str, Any]) -> bool:
     """Reject shared mailboxes and service accounts.
 
     A real employee has a company email and a personal-looking name. Service
-    accounts in this tenant are named GITHUB, AWS, urban_work_01, 관리자계정 and
+    accounts in this tenant are named GITHUB, AWS, ur_work_01, 관리자계정 and
     similar, so a marker list plus a length check separates them reliably.
     """
     name = normalize_name(entry.get("userName"))

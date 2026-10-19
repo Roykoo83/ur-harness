@@ -28,9 +28,9 @@ REPO = PROJ.parents[1]
 SSOT = (Path.home() / "{{MOUNT_REL}}"
         / "공유 드라이브" / "{{SSOT_DRIVE}}")
 # 아카이브되는 모든 메신저 방(dept·과제예산 등)을 읽는다. 과제예산방이
-# 아카이브만 되고 추출에서 빠져 있었다 (2026-09-04 Roy 확인 질문으로 발견).
-MSG = REPO / "projects/nworks-agent/output/raw_messenger"
-MAIL = REPO / "projects/nworks-agent/output/raw_mail"
+# 아카이브만 되고 추출에서 빠져 있었다 (2026-09-04 운영자 확인 질문으로 발견).
+MSG = _P("raw", "messenger")
+MAIL = _P("raw", "mail")
 
 WINDOW_DAYS = 7
 
@@ -47,7 +47,7 @@ SKIP_DIRS = {"_시스템", "50_대시보드", "90_보관", ".shortcut-targets-by
 # 부서방 발화 판정. 짧은 맞장구("네", "확인했습니다")는 태스크가 아니다.
 DONE_RE = re.compile(r"(완료|끝났|끝냈|제출했|발송했|전달했|반영했|올렸|처리했|집행했|납부했)")
 # 해소·결과 통보 — "가능하다고 합니다"류. 계획·문의가 있었다면 이것이 그 결과다.
-# 과제 신호가 함께 있을 때만 결과로 등재한다 (R8, Roy 답 2026-08-31 Q2·Q3).
+# 과제 신호가 함께 있을 때만 결과로 등재한다 (R8, 운영자 답 2026-08-31 Q2·Q3).
 RESOLVE_RE = re.compile(r"(가능하다고|가능하여|된다고 합니다|되었다고|확인되었|승인되|해결되|정리되)")
 ASK_RE = re.compile(r"(요청드립니다|부탁드립니다|필요합니다|해주세요|확인해\s*주|검토\s*부탁)")
 # 운영 OS 봇이 보낸 알림을 사람이 부서방에 옮겨 붙인 것. 그 안의 문장은 **이미 원장에
@@ -63,6 +63,19 @@ MACHINE_SENDER = re.compile(
 SUBJ_DUE = re.compile(r"~\s*(\d{1,2})\s*/\s*(\d{1,2})")
 BLOCK_RE = re.compile(r"(대기\s*중|지연|보류|막혔|안\s*됩니다|불가|미정입니다|답이\s*없)")
 MIN_LEN = 18
+
+
+
+def _P(name: str, sub: str = ""):
+    """표준 경로 — 설정이 정한 작업공간 아래. 예전 형제-프로젝트 경로를 대신한다."""
+    import sys as _s
+    from pathlib import Path as _Path
+    _s.path.insert(0, str(_Path(__file__).resolve().parents[2] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    if name == "raw":
+        return paths.raw(sub)
+    v = getattr(paths, name)
+    return (v / sub) if sub else v
 
 
 def subj_due(subj: str) -> str | None:
@@ -211,7 +224,7 @@ def from_messenger(index, days: int = WINDOW_DAYS) -> list[dict]:
             elif RESOLVE_RE.search(text) and match(text, index):
                 state, done = "done", day       # 해소·결과 통보 = 결과로 보유 (R8)
             elif any(p.search(text) for p in pat["messenger_allow"]):
-                state, done = "planned", None   # Roy가 답으로 허용한 패턴
+                state, done = "planned", None   # 운영자가 답으로 허용한 패턴
             else:
                 continue
             title = text[:140]
@@ -248,8 +261,8 @@ def from_mail(index, days: int = WINDOW_DAYS) -> list[dict]:
         sender = (mo.get("from") or {}).get("email", "")
         if MACHINE_SENDER.search(sender):
             continue                       # 「'…회의록.md' 문서가 공유됨」은 일이 아니다
-        allow = any(p.search(subj) for p in pat["mail_allow"])   # Roy 허용 패턴
-        # R7 (Roy 답 2026-08-31 Q1): 과제명이 식별되는 공유·안내 메일은 자동 등재.
+        allow = any(p.search(subj) for p in pat["mail_allow"])   # 운영자 허용 패턴
+        # R7 (운영자 답 2026-08-31 Q1): 과제명이 식별되는 공유·안내 메일은 자동 등재.
         # "중요한 사안일 수 있습니다" — 과제 신호 + (공유·안내류 제목 or 사내 발신).
         if not allow and match(subj, index) and (
                 re.search(r"공유|안내|공지|전달", subj)

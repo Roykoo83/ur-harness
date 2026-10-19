@@ -27,7 +27,7 @@ import weekly_src as _W  # noqa: E402  — 주간보고 주차 판정은 한 곳
 
 PROJ = Path(__file__).resolve().parents[2]
 REPO = PROJ.parents[1]
-WEEKLY = PROJ.parents[1] / "projects" / "urban-weekly-dashboard" / "data" / "parsed"
+WEEKLY = _weekly_dir("parsed")
 BUDGET = PROJ.parents[1] / "projects" / "rnd-budget-agent" / "data" / "dataset"
 DASH = PROJ / "output" / "rpbd_운영OS_대시보드.html"
 LEDGER = PROJ / "data" / "tasks" / "ledger.jsonl"
@@ -42,6 +42,15 @@ KEEP_BACKUPS = 12
 EXCLUDE_LI = re.compile(
     r"<li>(?:(?!</li>).)*?(?:급여명세|이체확인증|통장\s*사본|계좌\s*사본|민감\s*자료|"
     r"보안\s*폴더|비밀번호|패스워드|로그인\s*정보)(?:(?!</li>).)*?</li>", re.S)
+
+
+
+def _weekly_dir(sub: str = "") -> Path:
+    """주간보고 데이터 경로 — 설정의 작업공간 아래. 코드 경로와 섞지 않는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    return paths.weekly / sub if sub else paths.weekly
 
 
 def esc(s) -> str:
@@ -200,7 +209,7 @@ def _same_slot(a: dict, b: dict) -> bool:
 
 
 def dedupe(rows: list[dict]) -> list[dict]:
-    """같은 과제 안에서 같은 사안은 **한 번만** 싣는다 (Roy 지시 2026-08-31).
+    """같은 과제 안에서 같은 사안은 **한 번만** 싣는다 (운영자 지시 2026-08-31).
 
     출처가 달라 문구가 조금 다른 같은 사안(손 교정 vs 주간보고)이 진행·이슈 양쪽에
     나뉘어 실리던 것이 중복의 뿌리다. 이슈 측 > 원장 신뢰도 > 긴(더 정보 많은) 문구
@@ -246,7 +255,7 @@ def issue_brief_html(tasks: list[dict], doc: str, today: dt.date) -> str:
     """§00 — 과제별 이슈 브리핑. 결정·공유가 필요한 것만, 심각한 과제부터.
 
     보고의 우선순위: 이슈가 먼저다. 진행사항은 읽고 넘어가는 것이고,
-    공유해야 할 것은 이슈다 (Roy 지시 2026-08-31). 그래서 이 절이 맨 위다.
+    공유해야 할 것은 이슈다 (운영자 지시 2026-08-31). 그래서 이 절이 맨 위다.
     """
     names, order = card_names(doc)
 
@@ -283,9 +292,9 @@ def issue_brief_html(tasks: list[dict], doc: str, today: dt.date) -> str:
 
 
 def questions_card(today: dt.date) -> str:
-    """§00 끝에 붙는 「성장 질문」 — 기계가 확신 못 한 맥락을 Roy에게 묻는다.
+    """§00 끝에 붙는 「성장 질문」 — 기계가 확신 못 한 맥락을 운영자에게 묻는다.
 
-    답이 규칙이 되어 다음 사이클부터 자동 처리된다 (Roy 지시 2026-08-31:
+    답이 규칙이 되어 다음 사이클부터 자동 처리된다 (운영자 지시 2026-08-31:
     "애매한 맥락이 나오면 질문해서 지식체계를 계속 성장"). 버리는 대신 묻는다.
     """
     qf = PROJ / "data" / "tasks" / "questions.jsonl"
@@ -398,7 +407,7 @@ def acct_html(tasks: list[dict], names: dict[str, tuple[str, str]],
 
 
 def weekly_draft_html() -> str:
-    """§07 — 차주 주간보고 초안. 리더가 여기서 시작하도록 (Roy 지시 2026-08-31).
+    """§07 — 차주 주간보고 초안. 리더가 여기서 시작하도록 (운영자 지시 2026-08-31).
 
     공식 양식과 같은 칸이되, 원장이 채운 것과 이월(사람 확인 필요)을 구분해 보인다.
     확정 pptx 초안은 make_weekly_pptx.py 가 같은 데이터로 만든다.
@@ -436,7 +445,7 @@ def weekly_draft_html() -> str:
 #
 # 배지 하나로는 거짓말을 한다. 매 사이클 `data-asof` 에 지금 시각을 찍으니 화면은
 # 언제나 「본문 최신」이고, 그 초록 배지 아래에 8/13 에 끝난 인허가와 8/4 타 부서
-# 문장이 나란히 놓인다. Roy 정정 3(2026-08-19)의 취지는 **본문 나이와 수집 나이를
+# 문장이 나란히 놓인다. 운영자 정정 3(2026-08-19)의 취지는 **본문 나이와 수집 나이를
 # 가르는 것**이었는데 구현이 그것을 되돌려 놓았다.
 #
 # 그래서 **스트림마다 언제까지 반영됐는지**를 따로 적는다. 사람에게 새로 입력받는
@@ -592,7 +601,7 @@ def main(dry: bool = False) -> int:
             rowset.sort(key=lambda t: ((t.get("issue") or {}).get("needs") != "대표님컨펌",))
         else:
             # 이슈(막힘·확인 필요)는 §00 브리핑에만 싣는다. 진행 목록에 겹쳐 실으면
-            # 같은 줄이 두 번 보이고, 구분 자체가 무의미해진다 (Roy 지시 2026-08-31).
+            # 같은 줄이 두 번 보이고, 구분 자체가 무의미해진다 (운영자 지시 2026-08-31).
             # 완료건은 나열하지 않는다 — 건수만 남기고 상세·주간 정산은 원장이 맡는다.
             rowset = [t for t in rows if t["state"] in ("planned", "doing")
                       and not t.get("needs_check")]

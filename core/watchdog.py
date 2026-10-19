@@ -25,12 +25,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import hb
 
+def _P(name: str, sub: str = ""):
+    """표준 경로 — 설정이 정한 작업공간 아래. 예전 형제-프로젝트 경로를 대신한다."""
+    import sys as _s
+    from pathlib import Path as _Path
+    _s.path.insert(0, str(_Path(__file__).resolve().parents[1] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    if name == "raw":
+        return paths.raw(sub)
+    v = getattr(paths, name)
+    return (v / sub) if sub else v
+
+
 SERVICE = "watchdog"
 STATE = Path.home() / "{{WORKSPACE_NAME}}/state"
 ALERTS = STATE / "alerts"
 SUPPRESS_H = 6
-ROY_USER_ID = "c50aed6d-af42-42ef-16a1-03f2f66c3ae7"
-NWORKS = Path.home() / "{{WORKSPACE_NAME}}/projects/nworks-agent"
+NWORKS = _P("workspace")
 MOUNT = Path("{{MOUNT_ROOT}}/공유 드라이브/{{SSOT_DRIVE}}")
 
 # ④ 정합성 감시 폴더 — SSOT 안, API vs 마운트 대조
@@ -44,6 +55,23 @@ WATCHED = ["nworks-mail", "ssot-promote", "ssot-push", "u-changefeed", "ssot-ind
            "nworks-brief", "weekly-dashboard", "fathom-minutes", "hr-sync-check"]
 LIVE_PROCS = {"nworks-bridge": "nworks_hermes_bridge.py", "nworks-tunnel": "cloudflared"}
 TOKENS = {"ua_token_{{BOT_USER}}": Path.home() / ".nworks/ua_token_{{BOT_USER}}.json"}
+
+
+
+
+
+def _alert_target():
+    """알림 대상 → ("user"|"channel", id). 코드에 사람을 박지 않는다.
+
+    설정의 `operator.account` 하나로 조직도를 조회해 1:1 대상을 얻고,
+    못 찾으면 부서 채널로 돌린다. 둘 다 없으면 None — 조용히 사라지지 않게
+    부르는 쪽이 로그에 남긴다.
+    """
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[1] / "core"))
+    from lib.identity import alert_target                        # noqa: PLC0415
+    return alert_target()
 
 
 def findings_delay_schema() -> list[dict]:
@@ -266,7 +294,7 @@ _JUNK_RE = re.compile(r"(?: [2-9](?: \(\d+\))?| \(\d+\))\.[A-Za-z0-9]{1,8}$")
 def findings_mount_junk() -> list[dict]:
     """기계 구역 폴더의 **마운트 쪽** 충돌 잔재 — DriveFS 재업로드 고리의 원천.
 
-    2026-09-08 실측: 클라우드에서 「 2」「 3」을 지워도 Roy 마운트에 남은 로컬 사본(`… 2.html`,
+    2026-09-08 실측: 클라우드에서 「 2」「 3」을 지워도 운영자 마운트에 남은 로컬 사본(`… 2.html`,
     `… 2 (1).html`)을 DriveFS 가 "클라우드에 없는 로컬 파일"로 보고 원래 mtime 그대로 다시 올렸다.
     API 쪽 dedupe 만으로는 끝나지 않는다 — 마운트 쪽을 지워야 고리가 끊긴다.
     기계 구역은 API 가 쓰는 곳이므로, 마운트에 「 N」 이름이 보이면 그것은 예외 없이 잔재다.
@@ -340,15 +368,20 @@ def send(text: str, hard: bool, dry: bool) -> dict:
         from nworks.config import load_config           # noqa: PLC0415
         from nworks.domains import bot_send_text        # noqa: PLC0415
         cfg = load_config()
-        r = bot_send_text(NworksClient(cfg), cfg["bot_id"], text[:900], user_id=ROY_USER_ID)
+        tgt = _alert_target()
+        if not tgt:
+            log("알림 대상을 찾지 못해 보내지 않는다 — operator.account 를 확인한다")
+            return
+        kw = {"user_id": tgt[1]} if tgt[0] == "user" else {"channel_id": tgt[1]}
+        r = bot_send_text(NworksClient(cfg), cfg["bot_id"], text[:900], **kw)
         rec.update(sent=True, message_id=str(r)[:120] if r else None)
     except Exception as e:                              # noqa: BLE001
         rec["error"] = f"{type(e).__name__}: {e}"[:200]
     if hard:
         try:
-            env = {**os.environ, "HERMES_HOME": str(Path.home() / ".hermes/profiles/be_urban")}
+            env = {**os.environ, "HERMES_HOME": str(Path.home() / ".hermes/profiles/be_{{ORG_NAME}}")}
             subprocess.run(["hermes", "send", "-t", "discord:rojdoi", "-q",
-                            "-s", "Urban AX 와치독 · 정지", text[:1500]],
+                            "-s", "{{ORG_NAME}} AX 와치독 · 정지", text[:1500]],
                            env=env, capture_output=True, timeout=60)
             rec["hermes"] = True
         except Exception:                               # noqa: BLE001
@@ -376,8 +409,8 @@ def board(findings: list[dict], dry: bool) -> str:
     wait = [x for x in findings if x["sev"] == "대기"]
     head = "🔴 정지 있음" if hard else ("🟡 경고 있음" if warn else "🟢 정상")
     L = ["# 시스템 상태", "",
-         f"> {time.strftime('%Y-%m-%d %H:%M')} 자동 갱신 (15분 주기 · `com.urban.watchdog`) — **{head}**",
-         "> 자동화가 멈추면 여기 색이 바뀌고 Roy에게 알림이 갑니다. 이 파일은 편집하지 마세요.", "",
+         f"> {time.strftime('%Y-%m-%d %H:%M')} 자동 갱신 (15분 주기 · `com.{{ORG_NAME}}.watchdog`) — **{head}**",
+         "> 자동화가 멈추면 여기 색이 바뀌고 운영자에게 알림이 갑니다. 이 파일은 편집하지 마세요.", "",
          "## 데이터 수집·배포", "", "| 서비스 | 상태 | 마지막 성공 | cursor |", "|---|---|---|---|"]
     label = {"nworks-mail": "메일·캘린더·부서방 수집", "ssot-promote": "SSOT 승격",
              "ssot-push": "마운트→클라우드 배포",
@@ -410,7 +443,7 @@ def board(findings: list[dict], dry: bool) -> str:
 def _write_canary(findings: list[dict], head: str) -> None:
     """신선도 표지 — M 안 조건 ③.
 
-    체커(이 프로그램)는 **Roy 의 마운트만** 증명한다. 직원 마운트는 각자 다르다. 그래서
+    체커(이 프로그램)는 **운영자 의 마운트만** 증명한다. 직원 마운트는 각자 다르다. 그래서
     클라우드에 15분마다 갱신되는 파일 하나를 두고, 어느 마운트에서든 이 파일의
     generated 가 오래돼 보이면 "내 마운트가 뒤처졌다"를 그 자리에서 알 수 있게 한다.
     설치도 크레덴셜도 필요 없다 — 지침 한 줄이면 된다. API 로만 쓴다 (기계 구역).
@@ -479,7 +512,7 @@ def _run() -> int:
         if now - seen.get(k, 0) > SUPPRESS_H * 3600:
             fresh.append(x); seen[k] = now
     if fresh and not a.dry_run:
-        body = "[Urban AX 와치독]\n" + "\n".join(f"[{x['sev']}] {x['msg']}" for x in fresh)
+        body = "[{{ORG_NAME}} AX 와치독]\n" + "\n".join(f"[{x['sev']}] {x['msg']}" for x in fresh)
         rec = send(body, any(x["sev"] == "정지" for x in fresh), a.dry_run)
         aid = time.strftime("%Y%m%dT%H%M%S")
         (ALERTS / f"{aid}.json").write_text(json.dumps(

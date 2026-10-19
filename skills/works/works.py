@@ -510,7 +510,7 @@ def cmd_open(args: argparse.Namespace) -> int:
               f"신규는 `new-project.py <slug> \"<과제명>\"` 으로 먼저 개설하세요.",
               file=sys.stderr)
         return 1
-    # 패인 루트 = SSOT 정본 폴더 (Roy 표준 2026-09-07). 작업공간은 역링크로 함께 열린다.
+    # 패인 루트 = SSOT 정본 폴더 (운영자 표준 2026-09-07). 작업공간은 역링크로 함께 열린다.
     ssot = r["ssot"]
     cfg = ssot / ".claude" / "settings.local.json"
     make_cfg = not cfg.is_file()

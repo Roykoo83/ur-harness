@@ -197,14 +197,22 @@ ur-harness/
 | | 파일 | 행 |
 |---|---|---|
 | 코드 | 180+ | 약 27,000 |
-| 문서 | 15+ | 약 1,100 |
+| 문서 | 17+ | 약 1,400 |
 
 ---
 
 ## 상시 서비스
 
-`install/services.yaml` 하나가 **OS 중립 정의**이고, 거기서 systemd(Linux) · launchd(macOS) ·
-작업 스케줄러(Windows) 를 생성합니다.
+`install/services.yaml` 하나가 **OS 중립 정의**이고, 거기서 각 OS 의 스케줄러를 생성합니다.
+
+| OS | 생성 명령 | 결과물 | 등록 |
+|---|---|---|---|
+| Linux | `configure.py --units` | `install/systemd/ur-*.{service,timer}` | `systemctl --user enable --now` |
+| Windows | `configure.py --tasks` | `install/schtasks/UR-*.xml` | `schtasks /Create /XML` |
+| macOS | `configure.py --units` | 같은 유닛 (launchd 로 변환해 쓴다) | `launchctl bootstrap` |
+
+`--all` 은 돌고 있는 OS 를 보고 알아서 고릅니다. 정의 파일은 하나라서,
+한쪽만 고쳐지고 다른 쪽이 낡는 일이 없습니다. 윈도우 설치는 `docs/09_윈도우_설치.md`.
 
 | 서비스 | 하는 일 | 주기 |
 |---|---|---|
@@ -297,6 +305,8 @@ graph LR
 | [05 업무 매뉴얼](docs/05_업무_매뉴얼.md) | 사업계획서 · 예산 · 회의록 · 주간보고 | 전 구성원 |
 | [06 운영과 장애 대응](docs/06_운영과_장애대응.md) | 증상별 대응 · 백업 | 관리자 |
 | [07 보안](docs/07_보안.md) | 비밀값 · 데이터 취급 · 권한 | 관리자 |
+| [08 신원과 데이터 출처](docs/08_신원과_데이터_출처.md) | **코드에 사람을 박지 않는 규칙** · 조직도·온톨로지에서 읽기 | 개발·관리자 |
+| [09 윈도우 설치](docs/09_윈도우_설치.md) | Windows 10/11 · Server | 관리자 |
 | [스킬 가이드](skills/README.md) | OS 별 설치 · 능력 선언 | 전 구성원 |
 | [정본 템플릿](ssot-template/README.md) | 폴더 구조 복사해 시작 | 관리자 |
 

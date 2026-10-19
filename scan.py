@@ -69,7 +69,14 @@ RULES: list[tuple[str, str, str]] = [
     ("토큰 리터럴", r"(?i)\b(secret|token|api[_-]?key|password)\b\s*[:=]\s*[\"'][^\"'<>{}$\s]{12,}[\"']",
      "환경변수나 설정 파일 참조로 바꾼다"),
 
-    # 4 연락처
+    # 4 폐지된 레이아웃 — 패키징 이전 형제-프로젝트 경로.
+    #   이 경로는 새로 설치한 사람의 기계에 존재하지 않는다. 임포트는 통과하고
+    #   실행 시점에만 터지므로, 올리기 전에 여기서 잡는다.
+    ("폐지된 경로", r"projects/(nworks-agent|rpbd-infra|fathom-agent|[a-z-]*weekly-dashboard)"
+                r"|/scripts/(nworks|agents)/",
+     "저장소 안 경로나 설정의 작업공간(paths.*)으로"),
+
+    # 5 연락처
     # 서비스 제공자의 시스템 발신 주소는 조직 고유값이 아니다 — 판정 로직에 필요하므로 허용한다
     ("이메일", r"[A-Za-z0-9._%+-]+@(?!example\.(org|com)\b|(?:[A-Za-z0-9.-]+\.)?"
                r"(?:navercorp|worksmobile|google|atlassian|slack|github|anthropic|openai)\.com\b)"

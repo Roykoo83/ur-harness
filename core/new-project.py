@@ -9,7 +9,7 @@
   3. {{SSOT_DRIVE}}/<category>/<과제명>/  — 정본 폴더 골격 + _README.md (팀원용 소비 맥락)
 
 원칙: **작업 산출물은 3번(SSOT)에 둔다** — 조사·검증·발주문·실행로그까지.
-       팀원이 이어받으려면 로컬에만 있으면 안 된다 (2026-09-21 Roy 결정).
+       팀원이 이어받으려면 로컬에만 있으면 안 된다 (2026-09-21 운영자 결정).
        1번(작업공간)에는 임시 스크립트·캐시·빌드 부산물만. U드라이브 원천은 읽기 전용.
 
 사용:
@@ -60,7 +60,7 @@ GOAL_TEMPLATE = """# {slug} — 과제 작업 공간
 |---|---|
 | 원천 문서 | U드라이브 (채우기) |
 | SSOT 정본 | `{{SSOT_DRIVE}}/{category}/{title}/` |
-| 태스크 원장 | `~/{{WORKSPACE_NAME}}/projects/rpbd-infra/data/tasks/ledger.jsonl` |
+| 태스크 원장 | `~/{{WORKSPACE_NAME}}-work/tasks/ledger.jsonl` |
 
 ## 산출물 규칙
 
@@ -74,7 +74,7 @@ RULES_TEMPLATE = """# {slug} 작업 규칙
 1. SSOT·U드라이브 원천은 **읽기 전용** — 수정·삭제 금지 (C7.2)
 2. 태스크 상태 변경은 `rpbd-infra/scripts/tasks/apply.py` 로 — 원장을 직접 고치지 않는다
 3. 금액·용어는 **주간보고서 → 온톨로지 → 메일 → 전사** 우선순위로 확인
-4. 발송(메일·봇)은 승인된 유형만 — 신규 유형은 Roy 승인 후
+4. 발송(메일·봇)은 승인된 유형만 — 신규 유형은 운영자 승인 후
 """
 
 README_TEMPLATE = """# {title} — 과제 폴더 안내
@@ -132,7 +132,7 @@ CLAUDE_TEMPLATE = """# {title} — 세션 진입점
 
 - 작업·초안: 이 폴더 (`작업/` · `workspace/` · `output/`)
 - **SSOT 정본**: `{{SSOT_DRIVE}}/{category}/{title}/` (세션 패인에 함께 열린다)
-- 태스크 원장: `~/{{WORKSPACE_NAME}}/projects/rpbd-infra/data/tasks/ledger.jsonl`
+- 태스크 원장: `~/{{WORKSPACE_NAME}}-work/tasks/ledger.jsonl`
 
 ## 주의
 

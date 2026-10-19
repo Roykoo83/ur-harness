@@ -2,7 +2,7 @@
 """SSOT 쓰기·읽기 단일 창구 — 보완기획 §3-2 f
 
 **업로드 성공(rc=0)은 도착을 증명하지 않는다.** 해시 대조까지 해야 "☁ 반영"이라 말할 수 있다.
-그리고 원격을 `gdrive:`(rclone 공용 client_id, Roy OAuth)에서 `SSOT_rw:`(서비스계정)로 옮긴다 —
+그리고 원격을 `gdrive:`(rclone 공용 client_id, 운영자 OAuth)에서 `SSOT_rw:`(서비스계정)로 옮긴다 —
 공용 client 는 분당 쿼터가 상시 포화라 403 이 반복되고 2026년 중 폐기 예고됐다.
 
   from lib.ssot_io import put, verify
@@ -14,7 +14,7 @@ from pathlib import Path
 
 RCLONE = shutil.which("rclone") or "/opt/homebrew/bin/rclone"
 
-# ── 쓰기 구역표 — M 안 (Roy 결정 2026-09-07) ───────────────────────────────
+# ── 쓰기 구역표 — M 안 (운영자 결정 2026-09-07) ───────────────────────────────
 # 한 경로에 쓰는 주체는 하나다. 이 창구(API)로 쓸 수 있는 곳은 아래 **기계 구역**만이다.
 # 나머지는 전부 사람(의 AI)이 마운트로 쓰는 구역이고, 자동화가 API 로 거기 쓰면
 # DriveFS 와 경합해 「이름 2」·동명 사본이 생긴다 (2026-09-07 주간보고 pptx · 대시보드 8쌍 실측).

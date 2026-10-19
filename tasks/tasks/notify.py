@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""결정이 필요한 건을 Roy에게 1:1로 알린다.
+"""결정이 필요한 건을 운영자에게 1:1로 알린다.
 
     python3 scripts/tasks/notify.py [--dry]
 
@@ -9,7 +9,7 @@
 **이미 알린 건은 다시 알리지 않는다.** 3시간마다 같은 목록을 보내면 알림 피로로 통째로
 무시하게 되고, 그러면 정작 새 건이 왔을 때도 안 열어 본다. (터널 가드에서 겪은 것과 같다)
 
-Roy 지시 2026-08-24 — "의사결정이 필요한 내용이 있다면 나에게 알려줘야지"
+운영자 지시 2026-08-24 — "의사결정이 필요한 내용이 있다면 나에게 알려줘야지"
 """
 from __future__ import annotations
 
@@ -24,9 +24,22 @@ REPO = PROJ.parents[1]
 LEDGER = PROJ / "data" / "tasks" / "ledger.jsonl"
 STATE = PROJ / "data" / "tasks" / "notified.json"
 NW = REPO / "projects" / "nworks-agent"
-ROY = "c50aed6d-af42-42ef-16a1-03f2f66c3ae7"
-
 DECISION = {"대표님컨펌"}
+
+
+
+def _alert_target():
+    """알림 대상 → ("user"|"channel", id). 코드에 사람을 박지 않는다.
+
+    설정의 `operator.account` 하나로 조직도를 조회해 1:1 대상을 얻고,
+    못 찾으면 부서 채널로 돌린다. 둘 다 없으면 None — 조용히 사라지지 않게
+    부르는 쪽이 로그에 남긴다.
+    """
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib.identity import alert_target                        # noqa: PLC0415
+    return alert_target()
 
 
 def read_ledger() -> list[dict]:
@@ -49,7 +62,11 @@ def send(text: str) -> bool:
         from nworks.client import NworksClient
         from nworks.config import load_config
         from nworks.domains import bot_send_text
-        bot_send_text(NworksClient(), load_config()["bot_id"], text, user_id=ROY)
+        tgt = _alert_target()
+        if not tgt:
+            return
+        kw = {"user_id": tgt[1]} if tgt[0] == "user" else {"channel_id": tgt[1]}
+        bot_send_text(NworksClient(), load_config()["bot_id"], text, **kw)
         return True
     except Exception as e:
         print(f"발송 실패: {str(e)[:160]}")

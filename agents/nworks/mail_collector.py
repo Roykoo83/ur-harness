@@ -1,8 +1,8 @@
 """A1 mail collector — 수집 계정의 받은편지함을 전량 수집한다.
 
 수집 계정은 `~/.nworks/config.json` 의 `mail_accounts` 에 적힌 것뿐이고, 현재 `{{BOT_USER}}` 하나다
-(Roy 결정 2026-09-04: {{OPERATOR_USER}} 개인계정 경유 폐지, research@ 그룹의 역할은 {{BOT_USER}} 이 대신한다).
-주소 필터는 쓰지 않는다 (Roy 확정 2026-08-12: 전 수신 메일 수집).
+(운영자 결정 2026-09-04: {{OPERATOR_USER}} 개인계정 경유 폐지, research@ 그룹의 역할은 {{BOT_USER}} 이 대신한다).
+주소 필터는 쓰지 않는다 (운영자 확정 2026-08-12: 전 수신 메일 수집).
 
 Idempotent: state file tracks every seen mailId — 재실행 시 신규분만 조회.
 Raw layout (nworks_cycle 이 U/5. Naverworks/00_raw/mail_<계정키>/ 로 동기화):
@@ -93,7 +93,7 @@ def _store(mail: dict, mail_obj: dict, mid: str, base: Path,
                 f"{att.get('attachmentId')} {att.get('filename')}: {str(e)[:200]}\n")
 
 
-# 광고 자동 필터 (Roy 확정 2026-08-12): "(광고)" 표기 메일은 수집 제외하고
+# 광고 자동 필터 (운영자 확정 2026-08-12): "(광고)" 표기 메일은 수집 제외하고
 # 발신 도메인을 차단 목록에 자동 등록 — 이후 표기가 없어도 그 도메인 발신은 제외.
 # 정보통신망법상 광고 메일은 제목에 (광고) 표기가 의무라 마커 신뢰도가 높다.
 AD_SUBJECT_RE = re.compile(r"^\s*[\[(（]\s*광고")

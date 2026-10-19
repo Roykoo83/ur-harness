@@ -97,3 +97,16 @@ watchdog:
 transcribe:
   provider: "groq"           # groq | local
   external_ok: false         # true 로 두면 외부 전송 확인을 묻지 않는다 (권장하지 않음)
+
+# access — 기능별로 다룰 사람. **메일 주소만** 적는다.
+#   이름·사용자ID 는 조직도와 온톨로지가 정본이므로 여기에 적지 않는다.
+#   비우면 운영자 한 사람만 대상이 된다.
+access:
+  default: []          # 공통 기본값
+  calendar: []         # 일정 수집·브리핑 대상
+  bridge: []           # 봇 게이트웨이 응답 허용 대상
+
+# install — 설치 환경. 비워 두면 PATH 에서 찾는다.
+install:
+  python: ""                   # 예: /usr/bin/python3  (Linux·macOS)
+  python_windows: ""           # 예: C:\\Python312\\pythonw.exe  (콘솔 창 없이 실행)

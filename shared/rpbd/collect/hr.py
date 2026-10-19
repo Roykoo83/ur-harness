@@ -1,4 +1,4 @@
-"""HR data collector for Urban Data Lab personnel and project allocations.
+"""HR data collector for {{ORG_NAME}} Data Lab personnel and project allocations.
 """
 
 from datetime import datetime
@@ -139,7 +139,7 @@ class HRCollector:
                             f"Row {row_idx}: Failed to convert allocation value for {name} ({task_name}): {err}"
                         )
 
-            # Filter target: Urban Data Lab personnel (including '{{ORG_NAME}}', '모두', '퇴사')
+            # Filter target: {{ORG_NAME}} Data Lab personnel (including '{{ORG_NAME}}', '모두', '퇴사')
             if org in ("{{ORG_NAME}}", "모두", "퇴사"):
                 person_id = f"UDL-{udl_person_index:03d}"
                 udl_person_index += 1
@@ -187,7 +187,7 @@ class HRCollector:
                     "path": RELATIVE_SOURCE_PATH,
                 }
 
-                # Roy 2026-08-04: the NAVER Works directory is the personnel master
+                # 운영자 2026-08-04: the NAVER Works directory is the personnel master
                 # (DirectoryCollector). This spreadsheet is a 2026-07-22 export whose
                 # org column had already drifted, so it no longer defines who works
                 # here -- it contributes project allocation only, and only for people

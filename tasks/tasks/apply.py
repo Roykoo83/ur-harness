@@ -2,7 +2,7 @@
 """사람이 알려준 상태를 원장에 반영한다.
 
     python3 scripts/tasks/apply.py --find "제3자 테스트"
-    python3 scripts/tasks/apply.py --id T-1234abcd --state done --note "집행 완료" --by Roy
+    python3 scripts/tasks/apply.py --id T-1234abcd --state done --note "집행 완료" --by 운영자
 
 왜 별도 도구인가 — 원장을 손으로 고치면 다음 수집이 덮어쓴다. 정정은 **가장 높은 신뢰도의
 증거**로 들어가야 하고, 그래야 추출기가 만든 값보다 우선한다.
@@ -10,7 +10,7 @@
 `--state` 없이 `--note` 만 주면 상태는 그대로 두고 메모만 붙는다.
 `--clear-check` 는 「확인 필요」 표시만 지운다 — 사람이 확인해 줬다는 뜻이다.
 
-봇 한 줄 정정(`@Urban AX Bot T-xxxx 완료`)도 결국 이 함수를 부르게 된다.
+봇 한 줄 정정(`@{{ORG_NAME}} AX Bot T-xxxx 완료`)도 결국 이 함수를 부르게 된다.
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def main() -> int:
     ap.add_argument("--id")
     ap.add_argument("--state", choices=STATES)
     ap.add_argument("--note")
-    ap.add_argument("--by", default="Roy")
+    ap.add_argument("--by", default="운영자")
     ap.add_argument("--clear-check", action="store_true")
     ap.add_argument("--owner")
     ap.add_argument("--due")

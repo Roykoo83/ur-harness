@@ -199,6 +199,27 @@ class _Paths:
         return self.workspace / "output"
 
     @property
+    def stage(self) -> Path:
+        """파싱·정제된 중간 산출물. 승격 전 단계다."""
+        return self.workspace / "stage"
+
+    def raw(self, kind: str = "") -> Path:
+        """수집 원본 (mail · messenger · calendar). 불변 로그로 다룬다."""
+        return self.workspace / "raw" / kind if kind else self.workspace / "raw"
+
+    @property
+    def ledger(self) -> Path:
+        """태스크 원장 (jsonl)."""
+        return self.workspace / "tasks" / "ledger.jsonl"
+
+    @property
+    def weekly(self) -> Path:
+        """주간보고 수집물(parsed · attachments). 작업공간 안에 둔다 —
+        예전에는 형제 프로젝트 폴더를 가리켰는데, 그 폴더는 저장소에 없어서
+        새로 설치한 사람에게는 처음부터 빈 경로였다."""
+        return self.workspace / "weekly"
+
+    @property
     def mount_root(self) -> Path | None:
         v = cfg("operator.mount_root")
         return Path(v).expanduser() if v else None

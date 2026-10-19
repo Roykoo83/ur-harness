@@ -1,13 +1,13 @@
 """NAVER Works directory as the personnel master.
 
-Roy 2026-08-04: the directory is the current source of truth for who works here.
+운영자 2026-08-04: the directory is the current source of truth for who works here.
 The HR spreadsheet is a point-in-time export (2026-07-22) whose org column had
 already drifted -- it carried "퇴사" as if it were a company name. The directory
 reflects account state today, so it supplies the person records and the
 spreadsheet is demoted to project-allocation data.
 
 Only currently provisioned accounts become people. Past leavers are not carried
-over (Roy: keep only leavers occurring from now on); the source spreadsheet
+over (운영자: keep only leavers occurring from now on); the source spreadsheet
 stays in rawdata untouched, so nothing is destroyed -- the SSOT simply describes
 the present staff.
 """
@@ -26,7 +26,7 @@ from rpbd.collect.directory_match import (
 )
 
 # nworks-agent owns the API client; this project calls it rather than re-implementing.
-_NWORKS_SCRIPTS = Path.home() / "{{WORKSPACE_NAME}}/projects/nworks-agent/scripts"
+_NWORKS_SCRIPTS = Path(__file__).resolve().parents[3] / "agents"
 
 
 def _load_directory_users() -> list[dict[str, Any]]:

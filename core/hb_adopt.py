@@ -16,13 +16,35 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import hb
 
 H = Path.home()
-NW = H / "{{WORKSPACE_NAME}}/projects/nworks-agent"
-RP = H / "{{WORKSPACE_NAME}}/projects/rpbd-infra"
-FA = H / "{{WORKSPACE_NAME}}/projects/fathom-agent"
-WD = H / "{{WORKSPACE_NAME}}/projects/urban-weekly-dashboard"
+NW = _P("workspace")
+RP = _P("workspace")
+FA = _P("workspace")
+WD = _weekly_dir()
 # SSOT 는 **API 로 읽는다**(SSOT_ro). 마운트는 8일치 낡은 상태를 최신인 척 보여준 전력이 있고
 # (2026-09-04 KTL 사고), 이 어댑터는 15분마다 도는 최다 빈도 소비자다.
 import subprocess as _sp
+
+
+
+
+def _P(name: str, sub: str = ""):
+    """표준 경로 — 설정이 정한 작업공간 아래. 예전 형제-프로젝트 경로를 대신한다."""
+    import sys as _s
+    from pathlib import Path as _Path
+    _s.path.insert(0, str(_Path(__file__).resolve().parents[1] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    if name == "raw":
+        return paths.raw(sub)
+    v = getattr(paths, name)
+    return (v / sub) if sub else v
+
+
+def _weekly_dir(sub: str = "") -> Path:
+    """주간보고 데이터 경로 — 설정의 작업공간 아래. 코드 경로와 섞지 않는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    return paths.weekly / sub if sub else paths.weekly
 
 
 def ssot_read(rel: str) -> str | None:

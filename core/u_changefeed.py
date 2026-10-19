@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""U 변경 추적 — 보완기획 §3 (Roy 결정 2026-09-04: 전체 미러 대신 변경분 팔로우)
+"""U 변경 추적 — 보완기획 §3 (운영자 결정 2026-09-04: 전체 미러 대신 변경분 팔로우)
 
 **32GB 전체 미러는 만들지 않는다.** SSOT 를 보는 사람·AI 가 "U 에서 최근 무엇이 바뀌었나"
 를 알 수 있으면 된다. 이것이 없어서 KTL 사고가 났다 — 팀이 8/24~9/3 사이 U 에 60건을
@@ -30,11 +30,11 @@ def nfc(s: str) -> str:
 
 
 # U 를 읽는 두 경로. 서비스계정이 U 멤버가 되면 첫 항목만 쓰인다.
-# 두 번째는 Roy 개인 OAuth 토큰 — 공용 client_id 쿼터를 쓰므로 쓰지 않는 것이 좋지만,
+# 두 번째는 운영자 개인 OAuth 토큰 — 공용 client_id 쿼터를 쓰므로 쓰지 않는 것이 좋지만,
 # 서비스계정 승인을 기다리는 동안 U 를 못 보는 것보다는 낫다 (2026-09-07 실측 가능 확인).
 U_REMOTES = [
     (["U_ro:"], "service_account"),
-    (["--drive-team-drive", "{{SOURCE_DRIVE_ID}}", "gdrive:"], "roy_oauth_fallback"),
+    (["--drive-team-drive", "{{SOURCE_DRIVE_ID}}", "gdrive:"], "운영자_oauth_fallback"),
 ]
 
 FETCH_VIA = None  # 실제로 성공한 경로. 산출물 각주와 하트비트에 남긴다.

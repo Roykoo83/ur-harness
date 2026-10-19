@@ -101,9 +101,12 @@ def mapping() -> dict[str, str]:
 # 토큰을 손으로 이어 붙이면 존재하지 않는 값이 만들어진다.
 # `{{BOT_USER}}@{{ORG_NAME}}.co.kr` 은 표시이름에 도메인을 붙인 것이라 주소가 아니다.
 # 완성된 토큰(BOT_ACCOUNT · OPERATOR_ACCOUNT)이 따로 있으므로 그것을 쓴다.
+# 역-DNS 라벨(`com.{{ORG_NAME}}.watchdog`)은 조립이 아니다 — 끝이 TLD 인 것만 잡는다.
+# 가드가 정상인 것을 반복해 잡으면 사람이 가드를 꺼 버린다.
+_TLD = r"(?:com|net|org|io|ai|dev|app|kr|jp|us|co\.kr|or\.kr|go\.kr|ac\.kr)"
 BAD_ASSEMBLY = re.compile(
-    r"\{\{(?:ORG_NAME|ORG_SLUG)\}\}\s*\.[A-Za-z]{2,}"      # 표시이름 + 도메인 접미사
-    r"|\{\{[A-Z_]*USER\}\}@\{\{(?:ORG_NAME|ORG_SLUG)\}\}"  # 계정 + 표시이름
+    rf"\{{\{{(?:ORG_NAME|ORG_SLUG)\}}\}}\.{_TLD}\b"           # 표시이름 + 실제 TLD
+    rf"|\{{\{{[A-Z_]*USER\}}\}}@\{{\{{(?:ORG_NAME|ORG_SLUG)\}}\}}"  # 계정 + 표시이름
 )
 
 
@@ -248,6 +251,175 @@ WantedBy=timers.target
 """
 
 
+# ── 윈도우 작업 스케줄러 ────────────────────────────────────────────────────
+# systemd 와 같은 정의(services.yaml)에서 만든다. OS 마다 정의를 따로 두면
+# 한쪽만 고쳐지고 다른 쪽이 조용히 낡는다.
+TASK_XML = """<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>UR Harness — {desc}</Description>
+    <URI>\\UR Harness\\{name}</URI>
+  </RegistrationInfo>
+  <Triggers>
+{triggers}  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>
+    <Enabled>true</Enabled>
+{restart}  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{runner}</Command>
+      <Arguments>{args}</Arguments>
+      <WorkingDirectory>{build}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"""
+
+TRIG_REPEAT = """    <TimeTrigger>
+      <StartBoundary>2026-01-01T00:02:00</StartBoundary>
+      <Repetition>
+        <Interval>{iso}</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+"""
+TRIG_DAILY = """    <CalendarTrigger>
+      <StartBoundary>2026-01-01T{hh}:{mm}:00</StartBoundary>
+      <ScheduleByWeek>
+        <DaysOfWeek>{days}</DaysOfWeek>
+        <WeeksInterval>1</WeeksInterval>
+      </ScheduleByWeek>
+      <Enabled>true</Enabled>
+    </CalendarTrigger>
+"""
+TRIG_LOGON = """    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+"""
+RESTART_BLOCK = """    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+"""
+DOW = {"mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday",
+       "fri": "Friday", "sat": "Saturday", "sun": "Sunday"}
+
+
+def _iso_duration(sec: int) -> str:
+    """초 → ISO 8601 기간. 작업 스케줄러는 PT15M 꼴만 받는다."""
+    sec = max(60, int(sec))
+    if sec % 3600 == 0:
+        return f"PT{sec // 3600}H"
+    return f"PT{max(1, sec // 60)}M"
+
+
+def _calendar_triggers(spec: str) -> str:
+    """`Mon..Fri 08:00,13:00,17:00` 같은 정의를 CalendarTrigger 들로 푼다.
+
+    systemd 의 OnCalendar 문법을 그대로 쓰기 때문에 정의 파일 하나로 양쪽을 만든다.
+    """
+    parts = spec.strip().split()
+    days_spec = parts[0] if len(parts) > 1 else "Mon..Sun"
+    times = (parts[1] if len(parts) > 1 else parts[0]).split(",")
+    order = list(DOW)
+    sel = []
+    if ".." in days_spec:
+        a, b = days_spec.lower().split("..")
+        if a in order and b in order:
+            sel = order[order.index(a):order.index(b) + 1]
+    else:
+        sel = [d.strip().lower()[:3] for d in days_spec.split(",") if d.strip()[:3].lower() in DOW]
+    if not sel:
+        sel = order
+    days = "".join(f"<{DOW[d]} />" for d in sel)
+    out = []
+    for tm in times:
+        tm = tm.strip()
+        if ":" not in tm:
+            continue
+        hh, mm = tm.split(":")[:2]
+        out.append(TRIG_DAILY.format(hh=hh.zfill(2), mm=mm.zfill(2), days=days))
+    return "".join(out)
+
+
+def cmd_tasks(with_optional: list[str], all_optional: bool) -> int:
+    """윈도우 작업 스케줄러 XML 을 만든다 — systemd 와 같은 정의에서."""
+    try:
+        import yaml
+    except ImportError:
+        print("pyyaml 이 필요하다: pip install pyyaml", file=sys.stderr)
+        return 2
+    defs = yaml.safe_load((REPO / "install" / "services.yaml").read_text(encoding="utf-8"))
+    out = REPO / "install" / "schtasks"
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("UR-*.xml"):
+        old.unlink()
+    # pythonw.exe 는 콘솔 창을 띄우지 않는다 — 예약 작업에 맞다.
+    pyw = cfg("install.python_windows") or "pythonw.exe"
+    build_win = str(BUILD).replace("/", "\\")
+    made, skipped, broken = [], [], []
+    for svc in defs.get("services", []):
+        name, sched = svc["name"], svc.get("schedule", {})
+        ex = svc["exec"]
+        if not (REPO / ex).is_file():
+            broken.append(f"{name} → {ex}")
+            continue
+        plats = svc.get("platform")
+        if plats and "windows" not in [p.lower() for p in plats]:
+            skipped.append(f"{name} (플랫폼)")
+            continue
+        if svc.get("optional") and not all_optional and name not in with_optional:
+            skipped.append(f"{name} (선택)")
+            continue
+        if ex.endswith((".sh", ".bash")):
+            skipped.append(f"{name} (셸 스크립트 — 윈도우용 대체본 필요)")
+            continue
+        if sched.get("keepalive"):
+            triggers, restart = TRIG_LOGON, RESTART_BLOCK
+        elif "every" in sched:
+            triggers, restart = TRIG_REPEAT.format(iso=_iso_duration(sched["every"])), ""
+        else:
+            triggers, restart = _calendar_triggers(str(sched.get("calendar", ""))), ""
+        if not triggers:
+            skipped.append(f"{name} (주기 해석 불가)")
+            continue
+        xml = TASK_XML.format(
+            desc=svc.get("desc", name), name=f"UR-{name}", triggers=triggers,
+            restart=restart, runner=pyw,
+            args=f'"{build_win}\\{ex.replace("/", chr(92))}"', build=build_win)
+        (out / f"UR-{name}.xml").write_text(xml, encoding="utf-16")
+        made.append(f"UR-{name}")
+
+    if broken:
+        print(f"✗ 실행 파일이 없는 서비스 {len(broken)}개 — 작업을 만들지 않았다:")
+        for b in broken:
+            print(f"  · {b}")
+        print()
+    print(f"작업 스케줄러 XML {len(made)}개 → install/schtasks/")
+    for m in made:
+        print(f"  · {m}")
+    if skipped:
+        print(f"\n건너뜀 {len(skipped)}개: {', '.join(skipped)}")
+    print(f"\n등록 (관리자 권한 PowerShell 아님 — 일반 사용자로):\n"
+          f"  Get-ChildItem install\\schtasks\\UR-*.xml | ForEach-Object {{\n"
+          f"    schtasks /Create /XML $_.FullName /TN \"UR Harness\\$($_.BaseName)\" /F }}\n"
+          f"  schtasks /Query /TN \"UR Harness\\UR-watchdog\"      # 확인\n"
+          f"  # 로그아웃해도 돌게 하려면 각 작업의 '사용자 로그온 여부와 관계없이 실행'을 켠다")
+    return 1 if broken else 0
+
+
 def cmd_units(with_optional: list[str], all_optional: bool) -> int:
     try:
         import yaml
@@ -260,7 +432,9 @@ def cmd_units(with_optional: list[str], all_optional: bool) -> int:
     for old in out.glob("ur-*"):
         old.unlink()
     logs = Path(cfg("operator.workspace", "~/ur-harness-work")).expanduser() / "logs"
-    python = shutil.which("python3") or "/usr/bin/python3"
+    # 생성 기계의 파이썬이 그대로 박히면, 다른 기계로 유닛을 옮겼을 때 없는 경로를 가리킨다.
+    # 설정으로 고정할 수 있게 둔다 (유닛은 대상 기계에서 만드는 것이 기본이다).
+    python = cfg("install.python") or shutil.which("python3") or "/usr/bin/python3"
     host_os = platform.system().lower()
 
     made, skipped, broken = [], [], []
@@ -319,13 +493,14 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--build", action="store_true")
-    ap.add_argument("--units", action="store_true")
+    ap.add_argument("--units", action="store_true", help="systemd 유닛 (Linux)")
+    ap.add_argument("--tasks", action="store_true", help="작업 스케줄러 XML (Windows)")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--with", dest="with_opt", action="append", default=[],
                     help="선택 서비스를 켠다 (여러 번 가능)")
     ap.add_argument("--with-optional", action="store_true", help="선택 서비스를 전부 켠다")
     a = ap.parse_args()
-    if not (a.check or a.build or a.units or a.all):
+    if not (a.check or a.build or a.units or a.tasks or a.all):
         ap.print_help()
         return 0
     rc = 0
@@ -339,7 +514,9 @@ def main() -> int:
             return rc
     if a.build or a.all:
         rc |= cmd_build()
-    if a.units or a.all:
+    if a.tasks or (a.all and platform.system().lower() == "windows"):
+        rc |= cmd_tasks(a.with_opt, a.with_optional)
+    if a.units or (a.all and platform.system().lower() != "windows"):
         rc |= cmd_units(a.with_opt, a.with_optional)
     return rc
 

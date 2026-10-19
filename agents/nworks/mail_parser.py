@@ -16,7 +16,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 # 민감도 분류기 — rpbd 공용 모듈 재사용 (통합지시 2026-08-12 §4).
-# 태깅 전용: Roy 방침(메일은 기밀 아님)에 따라 수집·파싱은 막지 않고,
+# 태깅 전용: 운영자 방침(메일은 기밀 아님)에 따라 수집·파싱은 막지 않고,
 # SSOT 승격·대시보드 노출 필터가 쓸 표식만 남긴다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "rpbd-infra" / "src"))
 try:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Urban Data Lab native-PPTX toolkit.
+"""{{ORG_NAME}} Data Lab native-PPTX toolkit.
 
 Builds fully editable PowerPoint slides from the design.md token set — real
 shapes, real text runs, real tables. No rasterised slide images.

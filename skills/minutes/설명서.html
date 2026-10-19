@@ -87,7 +87,7 @@ html.js .rv.in{opacity:1;transform:none}
 </head>
 <body>
 <!-- ===================================================================
-  Urban 테마 토글 (붙여넣기용 컴포넌트)
+  {{ORG_NAME}} 테마 토글 (붙여넣기용 컴포넌트)
 
   쓰는 법
     1. 이 블록 전체를 <body> 안 맨 위에 붙인다
@@ -135,7 +135,7 @@ html.js .uthm{display:inline-flex}
 
 <script>
 (function(){
-  var KEY = "urban-theme";
+  var KEY = "{{ORG_NAME}}-theme";
   var ORDER = ["system","light","dark"];
   var LABEL = {system:"시스템", light:"라이트", dark:"다크"};
   var ICON  = {system:"#uthm-auto", light:"#uthm-sun", dark:"#uthm-moon"};
@@ -184,14 +184,14 @@ html.js .uthm{display:inline-flex}
   });
 })();
 </script>
-<!-- =============== Urban 테마 토글 끝 =============== -->
+<!-- =============== {{ORG_NAME}} 테마 토글 끝 =============== -->
 
 
 
 <div class="wrap">
 
 <header class="rv">
-  <div class="eb">Urban Data Lab · 연구기획사업부</div>
+  <div class="eb">{{ORG_NAME}} Data Lab · 연구기획사업부</div>
   <h1>회의록 워크플로우</h1>
   <p class="lede">회의 음성이 어떻게 정본 회의록이 되는지, 그 과정에서 사람이 무엇을 하는지.</p>
   <div class="rule"></div>

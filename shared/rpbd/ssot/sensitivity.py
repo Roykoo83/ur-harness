@@ -18,7 +18,7 @@ Sensitivity = Literal["high", "medium", "normal"]
 
 # Filename markers for documents whose body must never be read.
 #
-# 2026-09-22: bare "인건비" left this list (Roy: "메일로 공유되는 인건비는 비밀이 아니야.
+# 2026-09-22: bare "인건비" left this list (운영자: "메일로 공유되는 인건비는 비밀이 아니야.
 # 그냥 필터링 하지마"). It had graded RCMS manual screenshots, a budget-approval mail and a
 # public subsidy guideline as S3. The split that replaces it is below: a *record* of who was
 # paid stays high; a *procedure* for paying does not.
@@ -41,7 +41,7 @@ _RECORD_TERMS = ("지급내역", "지급명세", "명세", "대장", "집행내�
 # name alone. The directory is the stronger signal -- what a file sits next to
 # says more about it than what it is called.
 # 2026-09-22: "인건비" stays HERE while it leaves _HIGH_MARKERS. The distinction is the
-# whole point of Roy's decision: a *document about* labour cost (mail, RCMS manual, budget
+# whole point of 운영자's decision: a *document about* labour cost (mail, RCMS manual, budget
 # request) is ordinary work; a *folder* named 인건비 under 03.행정 holds the payslips and the
 # ID scans that sit beside them. Path is the stronger signal, filename the weaker one.
 _HIGH_PATH_MARKERS = ("인건비", "급여", "통장", "계좌", "증빙서류/인건비")

@@ -15,10 +15,24 @@ from lib import hb
 from lib.ssot_io import count as ssot_count, listing as ssot_list
 
 REPO = Path.home() / "{{WORKSPACE_NAME}}"
+HARNESS = Path(__file__).resolve().parents[1]   # 저장소 루트 — 코드는 여기 있다
 MOUNT = Path("{{MOUNT_ROOT}}/공유 드라이브/{{SSOT_DRIVE}}")
 SERVICES = ["nworks-mail", "ssot-promote", "u-changefeed", "ssot-index", "rpbd-tasks",
             "nworks-brief", "weekly-dashboard", "fathom-minutes", "hr-sync-check", "watchdog"]
 R = []
+
+
+
+def _P(name: str, sub: str = ""):
+    """표준 경로 — 설정이 정한 작업공간 아래. 예전 형제-프로젝트 경로를 대신한다."""
+    import sys as _s
+    from pathlib import Path as _Path
+    _s.path.insert(0, str(_Path(__file__).resolve().parents[1] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    if name == "raw":
+        return paths.raw(sub)
+    v = getattr(paths, name)
+    return (v / sub) if sub else v
 
 
 def chk(phase: str, name: str, ok: bool | None, detail: str) -> None:
@@ -66,7 +80,7 @@ def w2() -> None:
     # ── 메일 승격은 **대장** 이 정한다. stage 전량이 아니다 (2026-10-01).
     # 예전 판정식(stage 전량 − S3)은 대장 필터가 켜진 뒤 항상 실패한다 — 분모가 틀렸다.
     import csv as _csv
-    led_p = REPO / "projects/nworks-agent/output/stage/mail_대장.tsv"
+    led_p = _P("stage", "mail_대장.tsv")
     led = []
     if led_p.exists():
         with led_p.open(encoding="utf-8") as fh:
@@ -82,7 +96,7 @@ def w2() -> None:
         else:
             import re as _re
             have = {m.group(1) for f in api_files
-                    if (m := _re.search(r"((?:rbp|roy)-\d+)_", f))}
+                    if (m := _re.search(r"((?:rbp|운영자)-\d+)_", f))}
             missing, leaked = wantY - have, wantN & have
             orphan = have - wantY - wantN
             # S3(본문에 실제 계좌·주민번호)는 설계상 제외 — 소수의 missing 은 허용
@@ -95,7 +109,7 @@ def w2() -> None:
                 + (f" {sorted(missing)[:3]}" if missing else "") + " (S3제외·직전주기 허용 10)")
             # 접두 없는 메일 파일은 존재하지 않아야 한다 — 폐지된 research 계열의 흔적
             noprefix = [f for f in api_files if f.endswith(".md")
-                        and "/" in f and not _re.search(r"/(?:rbp|roy)-\d+_", f)]
+                        and "/" in f and not _re.search(r"/(?:rbp|운영자)-\d+_", f)]
             chk("W2", "접두 없는 메일 파일 0건", not noprefix,
                 f"{len(noprefix)}건" + (f": {noprefix[:2]}" if noprefix else ""))
         # 계열 경계 — frozen 이 늘거나 live 가 T0 이전을 받으면 분리가 깨진 것
@@ -109,9 +123,9 @@ def w2() -> None:
     hits = []
     # mail_collector.py 가 빠져 있어 거기서만 research 분기가 살아남았다 (2026-09-28 발견).
     # 감시 목록이 좁으면 게이트는 통과하면서 잔재는 남는다.
-    for f in ("projects/nworks-agent/scripts/agents/nworks_cycle.py",
-              "projects/nworks-agent/scripts/agents/mail_parser.py",
-              "projects/nworks-agent/scripts/agents/mail_collector.py"):
+    for f in ("agents/nworks/nworks_cycle.py",
+              "agents/nworks/mail_parser.py",
+              "agents/nworks/mail_collector.py"):
         t = (REPO / f).read_text(encoding="utf-8", errors="ignore")
         if '"research" if' in t or 'else "research"' in t:
             hits.append(f)
@@ -124,8 +138,8 @@ def w2() -> None:
     _bad.append("raw_mail" + "/research")
     DEAD = [q + b + q for b in _bad for q in ('"', "'")]
     lit = []
-    targets = sorted((REPO / "projects/nworks-agent/scripts").rglob("*.py"))
-    targets += [REPO / "scripts" / f for f in ("ssot_promote.py", "watchdog.py", "works.py")]
+    targets = sorted((HARNESS / "agents").rglob("*.py"))
+    targets += [HARNESS / "core" / f for f in ("ssot_promote.py", "watchdog.py")]
     for f in targets:
         if not f.exists():
             continue
@@ -140,7 +154,7 @@ def w2() -> None:
     bad = []
     for f in ("daily_brief.py", "mail_parser.py", "nworks_cycle.py", "nworks_hermes_bridge.py",
               "mail_collector.py"):
-        p = REPO / "projects/nworks-agent/scripts/agents" / f
+        p = HARNESS / "agents" / "nworks" / f
         if p.exists():
             r = subprocess.run([sys.executable, "-m", "py_compile", str(p)], capture_output=True)
             if r.returncode != 0:
@@ -148,7 +162,7 @@ def w2() -> None:
     chk("W2", "소비자 5개 문법(fixture)", not bad, "; ".join(bad) or "전부 컴파일 통과")
     # 쓰기 경로 — SSOT_rw 사용 여부
     legacy = []
-    for f in ("scripts/publish_dashboards.py", "projects/rpbd-infra/scripts/tasks/make_weekly_pptx.py"):
+    for f in ("core/publish_dashboards.py", "tasks/tasks/make_weekly_pptx.py"):
         t = (REPO / f).read_text(encoding="utf-8", errors="ignore")
         if "gdrive,team_drive" in t and "폴백" not in t.split("gdrive,team_drive")[0][-80:]:
             legacy.append(f)
@@ -180,7 +194,7 @@ def w3() -> None:
     }
     CODE_EXT = (".py", ".sh")
     try:
-        r = subprocess.run(["grep", "-rl", "CloudStorage/GoogleDrive", str(REPO / "scripts"),
+        r = subprocess.run(["grep", "-rl", "CloudStorage/GoogleDrive", str(HARNESS / "core"),
                             str(REPO / "projects")], capture_output=True, text=True, timeout=120)
         raw = [x for x in r.stdout.splitlines() if x.strip()]
     except Exception:                                        # noqa: BLE001
@@ -245,7 +259,7 @@ def w3() -> None:
     chk("W3", "health 보드 15분 내 갱신", age < 20, f"{age:.0f}분 전")
     # Hermes 메타 감시
     try:
-        env = {**os.environ, "HERMES_HOME": str(Path.home() / ".hermes/profiles/be_urban")}
+        env = {**os.environ, "HERMES_HOME": str(Path.home() / ".hermes/profiles/be_{{ORG_NAME}}")}
         j = subprocess.run(["hermes", "cron", "list"], env=env, capture_output=True,
                            text=True, timeout=60).stdout
     except Exception:                                        # noqa: BLE001

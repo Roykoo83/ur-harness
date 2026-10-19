@@ -6,7 +6,7 @@
 **JSON이 정본, HTML은 생성물.** 매뉴얼을 판독해 JSON을 채우면 화면이 따라온다.
 나중에 「시스템 입력용 산출물 생성 스킬」과 **브라우저 조작**이 같은 JSON을 읽는다.
 
-화면 구조 (Roy 지시 2026-08-13)
+화면 구조 (운영자 지시 2026-08-13)
     좌측 패널   시스템 목록 + 접속 링크 (정산 / 입찰 분리)
     상단 과제바  이 시스템을 쓰는 과제 — 클릭 가능, 진행 상태 표시
     사이트 메뉴  실제 사이트 메뉴 순서를 모사
@@ -30,7 +30,7 @@ def _find_drive() -> Path | None:
     돌아야 하므로 탐지로 바꾼다. 못 찾으면 None >> RCMS 원본 복사만 건너뛴다(비치명).
     """
     import os
-    env = os.environ.get("URBAN_DRIVE")
+    env = os.environ.get("UR_DRIVE")
     if env:
         return Path(env)
     home = Path.home()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DriveFS 캐시 초기화 + 마운트↔클라우드 전체 재동기화 — Roy 승인 작업 (2026-10-01)
+"""DriveFS 캐시 초기화 + 마운트↔클라우드 전체 재동기화 — 운영자 승인 작업 (2026-10-01)
 
 왜 필요한가
   마운트가 changelog 루프에 빠져 클라우드를 못 따라온다. 실측: SSOT 메일 API 1,031 /
@@ -23,7 +23,7 @@
   6 converge   마운트가 API 와 일치할 때까지 대기
   7 restore    백업분이 클라우드에 없으면 API 로 올린다
   8 reindex    색인 재생성 (가드가 통과해야 쓴다)
-  9 report     Roy 1:1 알림 + 로그
+  9 report     운영자 1:1 알림 + 로그
 
 사용
   drivefs_resync.py --dry-run     1~2 단계만. 무엇을 백업할지 보여준다
@@ -89,18 +89,18 @@ def log(msg: str) -> None:
 
 
 def notify(msg: str) -> None:
-    """Roy 1:1 알림. 실패해도 작업은 계속한다 — 로그가 정본이다."""
+    """운영자 1:1 알림. 실패해도 작업은 계속한다 — 로그가 정본이다."""
     try:
-        sys.path.insert(0, str(REPO / "projects/nworks-agent/scripts"))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents"))
         from nworks.client import NworksClient
         from nworks.config import load_config
         from nworks.domains import bot_send_text
-        sys.path.insert(0, str(REPO / "projects/nworks-agent/scripts/agents"))
-        from nworks_cycle import ROY_USER_ID          # user_id 는 코드 상수다(config 에 없다)
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents" / "nworks"))
+        from nworks_cycle import OPERATOR_USER_ID          # user_id 는 코드 상수다(config 에 없다)
         bot_send_text(NworksClient(), load_config()["bot_id"],
-                      f"[Urban AX Bot] DriveFS 재동기화\n{msg[:900]}",
-                      user_id=ROY_USER_ID)
-        log("  (Roy 알림 발송)")
+                      f"[{{ORG_NAME}} AX Bot] DriveFS 재동기화\n{msg[:900]}",
+                      user_id=OPERATOR_USER_ID)
+        log("  (운영자 알림 발송)")
     except Exception as e:                                  # noqa: BLE001
         log(f"  (알림 실패: {type(e).__name__} {str(e)[:120]} — 로그를 보면 된다)")
 
@@ -411,7 +411,7 @@ def main() -> int:
     WORK.mkdir(parents=True, exist_ok=True)
 
     # 예약 실행은 Mac 이 잠들어 있으면 그 시각을 건너뛰고 **깨어날 때** 실행된다.
-    # 그대로 두면 아침에 Roy 가 맥을 여는 순간 마운트를 내려버린다. 창을 벗어나면 거른다.
+    # 그대로 두면 아침에 운영자 가 맥을 여는 순간 마운트를 내려버린다. 창을 벗어나면 거른다.
     if a.window:
         try:
             lo, hi = (datetime.strptime(x, "%H:%M").time() for x in a.window.split("-"))

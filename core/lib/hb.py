@@ -13,7 +13,7 @@ from __future__ import annotations
 import json, os, socket, tempfile, time
 from pathlib import Path
 
-ROOT = Path(os.environ.get("URBAN_AX_STATE", Path.home() / "{{WORKSPACE_NAME}}" / "state"))
+ROOT = Path(os.environ.get("UR_STATE", Path.home() / "{{WORKSPACE_NAME}}" / "state"))
 HB_DIR = ROOT / "heartbeat"
 SCHEMA_VERSION = "hb/1.0"
 

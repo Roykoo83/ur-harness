@@ -58,7 +58,7 @@ services:
 
   - name: ops-ledger
     desc: "과제 태스크 원장 갱신"
-    exec: tasks/원장/회차실행.sh
+    exec: tasks/원장/회차실행.py
     schedule: { calendar: "Mon..Fri 08:00,13:00,17:00" }
     optional: true
 

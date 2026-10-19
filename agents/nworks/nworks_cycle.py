@@ -1,9 +1,9 @@
 """nworks cycle — mail pull -> parse -> calendar -> messenger -> drive sync (pure python).
 
-주기는 launchd `com.urban.nworks-mail` 의 StartInterval 이 정한다 (현재 3600초 = 1시간).
+주기는 launchd `com.{{ORG_NAME}}.nworks-mail` 의 StartInterval 이 정한다 (현재 3600초 = 1시간).
 docstring 에 주기를 박아 두면 plist 를 고쳐도 문서만 낡는다 — plist 가 정본이다.
 
-launchd com.urban.nworks-mail runs this with miniconda python3.
+launchd com.{{ORG_NAME}}.nworks-mail runs this with miniconda python3.
 zsh+rsync 버전을 대체: launchd TCC(전체 디스크 접근)는 실행 바이너리 기준이므로
 python3 단일 바이너리로 고정하고, rsync 대신 shutil 동기화를 쓴다.
 - 00_raw: 추가/갱신만 (원본 불변 — 드라이브 쪽 삭제 없음)
@@ -23,6 +23,29 @@ LOG = PROJ / "workspace" / "mail_cycle.log"
 PY = sys.executable
 
 
+
+def _send_kwargs() -> dict:
+    """bot_send_text 에 넘길 수신자 인자. 대상이 없으면 빈 dict — 부르는 쪽이 건너뛴다."""
+    tgt = _alert_target()
+    if not tgt:
+        return {}
+    return {"user_id": tgt[1]} if tgt[0] == "user" else {"channel_id": tgt[1]}
+
+
+def _alert_target():
+    """알림 대상 → ("user"|"channel", id). 코드에 사람을 박지 않는다.
+
+    설정의 `operator.account` 하나로 조직도를 조회해 1:1 대상을 얻고,
+    못 찾으면 부서 채널로 돌린다. 둘 다 없으면 None — 조용히 사라지지 않게
+    부르는 쪽이 로그에 남긴다.
+    """
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib.identity import alert_target                        # noqa: PLC0415
+    return alert_target()
+
+
 def log(msg: str) -> None:
     LOG.parent.mkdir(exist_ok=True)
     with LOG.open("a") as f:
@@ -39,7 +62,7 @@ def run(desc: str, cmd: list) -> None:
 # ── UA 토큰 장애 감시 ─────────────────────────────────────────────────────
 # 2026-08-25 앱 스코프 변경으로 UA 토큰이 무효화됐는데 **이틀간 아무도 몰랐다.**
 # 수집이 매시간 401로 죽어도 로그에만 남고 사람에게 닿지 않았기 때문이다.
-# 401이 3회(=3시간) 연속되면 Roy 1:1 로 경고한다 — 승인된 발송 유형(사이클 이상 경고).
+# 401이 3회(=3시간) 연속되면 운영자 1:1 로 경고한다 — 승인된 발송 유형(사이클 이상 경고).
 # 매번 알리면 무시되므로 6시간에 한 번만 다시 알린다.
 _AUTH_STATE = PROJ / "workspace" / "ua_auth_watch.json"
 
@@ -60,7 +83,7 @@ def _watch_auth(desc: str, r) -> None:
     st["fails"] = st.get("fails", 0) + 1
     if st["fails"] >= 3 and _t.time() - st.get("alerted_at", 0) > 6 * 3600:
         try:
-            sys.path.insert(0, str(PROJ / "scripts"))
+            sys.path.insert(0, str(PROJ / "agents"))
             from nworks.client import NworksClient
             from nworks.config import load_config
             from nworks.domains import bot_send_text
@@ -70,7 +93,7 @@ def _watch_auth(desc: str, r) -> None:
                           f"(로그: nworks-agent/workspace/mail_cycle.log)",
                           user_id="{{OPERATOR_ACCOUNT}}")
             st["alerted_at"] = _t.time()
-            log("UA 토큰 장애 경고 발송 (Roy 1:1)")
+            log("UA 토큰 장애 경고 발송 (운영자 1:1)")
         except Exception as e:
             log(f"UA 장애 경고 실패: {str(e)[:120]}")
     _AUTH_STATE.write_text(_j.dumps(st))
@@ -119,18 +142,15 @@ def _enable_dataless_materialization() -> None:
         log(f"materialize 정책 설정 실패(무시): {e}")
 
 
-ROY_USER_ID = "c50aed6d-af42-42ef-16a1-03f2f66c3ae7"
-
-
-def alert_roy(msg: str) -> None:
-    """사이클 이상 시 Roy 1:1 경고 (Roy 승인 발송 유형, 2026-08-05)."""
+def alert_operator(msg: str) -> None:
+    """사이클 이상 시 운영자 1:1 경고 (운영자 승인 발송 유형, 2026-08-05)."""
     try:
-        sys.path.insert(0, str(PROJ / "scripts"))
+        sys.path.insert(0, str(PROJ / "agents"))
         from nworks.client import NworksClient
         from nworks.config import load_config
         from nworks.domains import bot_send_text
         bot_send_text(NworksClient(), load_config()["bot_id"],
-                      f"[Urban AX Bot·경고] nworks 사이클 이상\n{msg[:500]}", user_id=ROY_USER_ID)
+                      f"[경고] 그룹웨어 사이클 이상\n{msg[:500]}", **_send_kwargs())
     except Exception as e:
         log(f"경고 발송 실패: {str(e)[:100]}")
 
@@ -173,7 +193,7 @@ def build_messenger_stage() -> int:
 
 def mail_accounts() -> list[str]:
     """config.json의 mail_accounts 배열. 없으면 {{BOT_USER}} 단일.
-    2026-09-05 Roy 결정: 수집은 {{BOT_USER}} 만. research@ 그룹의 역할을 {{BOT_USER}} 이 대신한다.
+    2026-09-05 운영자 결정: 수집은 {{BOT_USER}} 만. research@ 그룹의 역할을 {{BOT_USER}} 이 대신한다.
     {{OPERATOR_USER}} 개인계정 경유는 폐기(토큰 8/12 사망 후 미복구, 폴백하면 조용히 0건 수집).
     계정 추가 절차: nwctl ua-auth <계정> (브라우저 동의 1회) → config에 등록."""
     try:
@@ -185,7 +205,7 @@ def mail_accounts() -> list[str]:
 
 
 # 수집하지 않지만 **U 에 보관하는** 계열. 계정이 폐지돼도 그 코퍼스는 원본이다
-# (Roy 2026-10-01: "6월부터의 이메일 파싱은 살려두어야 하고 U 에 저장되는 게 맞다").
+# (운영자 2026-10-01: "6월부터의 이메일 파싱은 살려두어야 하고 U 에 저장되는 게 맞다").
 # 수집 대상(mail_accounts)과 보관 계열은 다르다 — 섞으면 폐지 계정을 다시 긁는다.
 FROZEN_SERIES = ["{{OPERATOR_USER}}"]          # received < T0(2026-08-12T15:29:53). 563건 고정
 
@@ -198,22 +218,22 @@ def archived_series() -> list[str]:
 def main() -> None:
     _enable_dataless_materialization()
     log("cycle start (py)")
-    # Roy 확정(2026-08-12): 주소 필터 없이 전 수신 메일 수집 (급여류 포함 — 기밀 아님)
+    # 운영자 확정(2026-08-12): 주소 필터 없이 전 수신 메일 수집 (급여류 포함 — 기밀 아님)
     for acct in mail_accounts():
         key = acct.split("@")[0]
-        run(f"pull[{key}]", [PY, str(PROJ / "scripts" / "nwctl"), "mail-pull", acct,
+        run(f"pull[{key}]", [PY, str(PROJ / "agents" / "nworks" / "nwctl"), "mail-pull", acct,
                              "--max", "200", "--filter", "none"])
-        run(f"parse[{key}]", [PY, str(PROJ / "scripts" / "agents" / "mail_parser.py"), key])
+        run(f"parse[{key}]", [PY, str(PROJ / "agents" / "nworks" / "mail_parser.py"), key])
     # 정리대장 — 업무에 필요한 메일만 SSOT 로 가도록 판정한다. 승격기(ssot_promote)가
     # 이것을 전제로 하고, 없으면 메일 승격을 멈춘다. 그래서 파싱 직후 매번 다시 만든다 —
     # 신규 메일이 대장에 없으면 "대장미등재"로 보류돼 조용히 밀린다.
-    run("curate", [PY, str(PROJ / "scripts" / "agents" / "mail_curate.py")])
-    run("calendar", [PY, str(PROJ / "scripts" / "agents" / "calendar_collector.py")])
+    run("curate", [PY, str(PROJ / "agents" / "nworks" / "mail_curate.py")])
+    run("calendar", [PY, str(PROJ / "agents" / "nworks" / "calendar_collector.py")])
     log(f"messenger stage: {build_messenger_stage()}건")
 
     if not (FOUNDRY / "00_raw").exists():
         log(f"sync SKIP: 드라이브 미마운트/권한 없음 ({FOUNDRY})")
-        alert_roy(f"드라이브 미마운트/권한 없음 — 동기화 건너뜀\n{FOUNDRY}")
+        alert_operator(f"드라이브 미마운트/권한 없음 — 동기화 건너뜀\n{FOUNDRY}")
         return
     try:
         c1 = c2 = 0
@@ -241,11 +261,11 @@ def main() -> None:
         log(f"sync done: mail_raw+{c1} mail_stage~{c2} cal_raw~{c3} cal_stage~{c4} msg_raw+{c5} msg_stage~{c6}")
         skipped = getattr(sync_tree, "skipped", 0)
         if skipped >= 5:
-            alert_roy(f"동기화 중 파일 {skipped}건 건너뜀 — workspace/mail_cycle.log 확인 필요")
+            alert_operator(f"동기화 중 파일 {skipped}건 건너뜀 — workspace/mail_cycle.log 확인 필요")
         sync_tree.skipped = 0
     except PermissionError as e:
         log(f"sync 권한 오류(TCC): {e}")
-        alert_roy(f"드라이브 동기화 권한 오류(TCC): {e}")
+        alert_operator(f"드라이브 동기화 권한 오류(TCC): {e}")
 
     if LOG.stat().st_size > 1_000_000:
         LOG.write_text(LOG.read_text()[-500_000:])

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """인원 명부 동기화 — 네이버웍스 조직도를 정본으로 온톨로지 `사람/`을 맞춘다.
 
-Roy 지시(2026-09-22): "내가 주는 건 의미가 없다. 이런 데이터는 우리가 사용하는 시스템을
+운영자 지시(2026-09-22): "내가 주는 건 의미가 없다. 이런 데이터는 우리가 사용하는 시스템을
 기반으로 계속 성장해야 한다."
 
 왜 네이버웍스인가
@@ -26,7 +26,7 @@ import argparse, glob, os, re, sys, unicodedata
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, "{{HOME}}/{{WORKSPACE_NAME}}/projects/nworks-agent/scripts")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents"))
 
 SSOT = Path("{{MOUNT_ROOT}}/"
             "공유 드라이브/{{SSOT_DRIVE}}")

@@ -50,6 +50,15 @@ squash = lambda s: re.sub(r"\s+", " ", s or "").strip()        # noqa: E731
 
 # ------------------------------------------------------------------ 과제 정의
 
+
+def _weekly_dir(sub: str = "") -> Path:
+    """주간보고 데이터 경로 — 설정의 작업공간 아래. 코드 경로와 섞지 않는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    return paths.weekly / sub if sub else paths.weekly
+
+
 def load_defs() -> list[dict]:
     d = json.loads(DEFS.read_text(encoding="utf-8"))
     for p in d["과제"]:
@@ -99,7 +108,7 @@ BOT_RELAY = re.compile(r"🔔\s*운영\s*OS")
 
 
 def from_messenger(defs, since: dt.date) -> tuple[list[dict], list[dict]]:
-    """부서방·AX_TF. **봇이 있는 두 방만** 읽는다 (Roy 확정 2026-09-11).
+    """부서방·AX_TF. **봇이 있는 두 방만** 읽는다 (운영자 확정 2026-09-11).
 
     묶음 보고(「과제별 진행 상황 공유」)는 **태그 단위로 쪼갠다.** 통째로 140자를
     잘라 첫 태그 하나에 귀속시키면 여섯 과제 정보가 한 과제 한 줄이 된다.
@@ -264,7 +273,7 @@ THREAD_PFX = re.compile(
 # 메일·산출물·U·캘린더는 제목이나 파일 자체가 이미 일이라 검사하지 않는다.
 # 가린 것을 지우지 않는다. 원장에 그대로 남고 `업무: false` 만 붙는다.
 # 무조건 잡담. 길이와 무관하다
-CHAT_HARD = re.compile(r"^\s*(?:@\s*Urban\s*AX\s*Bot\b|https?://\S+\s*$)", re.I)
+CHAT_HARD = re.compile(r"^\s*(?:@\s*{{ORG_NAME}}\s*AX\s*Bot\b|https?://\S+\s*$)", re.I)
 
 # 짧을 때만 잡담. 「식사」「퇴근」 같은 말은 긴 업무 보고 안에도 섞여 나온다.
 # 실제로 「내일 국정센터 들어가고 하성지 박사와 미팅 후 … 퇴근하겠습니다」가
@@ -472,7 +481,7 @@ def freshness() -> dict:
 
     각 값에 주기와 한 줄 설명을 붙여 화면이 그대로 쓸 수 있게 한다.
     """
-    wk = REPO / "projects" / "urban-weekly-dashboard" / "data" / "parsed"
+    wk = _weekly_dir("parsed")
     fa = REPO / "projects" / "fathom-agent" / "data" / "actions.json"
     bg = REPO / "projects" / "rnd-budget-agent" / "data" / "dataset"
     return {
@@ -492,7 +501,7 @@ def freshness() -> dict:
         "주간보고": {"t": newest(wk.glob("*.json")) if wk.is_dir() else None,
                   "주기": "화 09:30", "설명": "컨플루언스"},
         # 회의록은 Fathom·녹음을 로컬 전사해 만드는 구조이고 **아직 설계 중이다**
-        # (Roy 확인 2026-09-14, 별도 에이전트와 진행). 고장 난 파이프라인이 아니므로
+        # (운영자 확인 2026-09-14, 별도 에이전트와 진행). 고장 난 파이프라인이 아니므로
         # 낡은 날짜를 띄우지 않는다. 완성되면 과제 폴더로 이관돼 SSOT 산출물로 붙는다.
         "회의록": {"t": None, "주기": "설계 중",
                  "설명": "Fathom·녹음 → 로컬 전사 → 과제 폴더 이관 (별도 진행)"},

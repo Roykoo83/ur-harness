@@ -24,7 +24,7 @@ import weekly_src as _W  # noqa: E402  — 주간보고 주차 판정은 한 곳
 
 PROJ = Path(__file__).resolve().parents[2]
 REPO = PROJ.parents[1]
-WEEKLY = REPO / "projects" / "urban-weekly-dashboard" / "data" / "parsed"
+WEEKLY = _weekly_dir("parsed")
 ACTIONS = REPO / "projects" / "fathom-agent" / "data" / "actions.json"
 CAL = REPO / "projects" / "nworks-agent" / "output" / "raw_calendar"
 LEDGER = PROJ / "data" / "records" / "project"
@@ -36,6 +36,15 @@ ORG = "연구기획사업부"
 CAL_KEYWORDS = re.compile(r"마감|제출|심의|심사|실사|접수|평가|점검|보고회|발표|종료|만료|D-\d")
 # 값이 없다는 뜻으로 부서가 쓰는 표현들. 태스크가 아니다.
 EMPTY = re.compile(r"^\s*(?:[-–—]|없음|특이사항\s*없음|해당\s*없음|N/?A)?\s*$", re.I)
+
+
+
+def _weekly_dir(sub: str = "") -> Path:
+    """주간보고 데이터 경로 — 설정의 작업공간 아래. 코드 경로와 섞지 않는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib.config import paths                                 # noqa: PLC0415
+    return paths.weekly / sub if sub else paths.weekly
 
 
 def norm(s: str) -> str:

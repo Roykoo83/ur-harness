@@ -46,7 +46,7 @@ command -v cloudflared >/dev/null 2>&1 && ok "cloudflared" || warn "cloudflared 
 
 say "4. 설정"
 [ -f config/harness.yaml ] && ok "config/harness.yaml 있음" || no "config/harness.yaml 없음 — example 을 복사해 채운다"
-[ -f "$HOME/.nworks/config.json" ] && ok "그룹웨어 설정(~/.nworks) 있음" || warn "그룹웨어 설정 없음 — docs/02_hermes_bot.md 참조"
+[ -f "$HOME/.nworks/config.json" ] && ok "그룹웨어 설정(~/.nworks) 있음" || warn "그룹웨어 설정 없음 — docs/03_봇_게이트웨이_연동.md 참조"
 
 if [ ${#MISSING[@]} -gt 0 ]; then
   say "설치가 필요한 것: ${MISSING[*]}"
@@ -81,7 +81,7 @@ if [ -n "$WS" ]; then mkdir -p "$WS"/{state,logs,output} && ok "작업공간 $WS
 say "다음 단계"
 cat <<'EOT'
   1) cp config/harness.example.yaml config/harness.yaml  &&  값을 채운다
-  2) rclone config      # SSOT_ro · SSOT_rw 원격을 만든다 (docs/01_admin.md)
+  2) rclone config      # SSOT_ro · SSOT_rw 원격을 만든다 (docs/01_관리자_온보딩.md)
   3) python3 install/configure.py --all
   4) systemd 유닛 설치 — configure 가 출력한 명령을 그대로 실행
   5) python3 core/gate_check.py      # 정합성 확인
