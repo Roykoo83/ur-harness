@@ -14,7 +14,9 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import subprocess
+import time
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -27,6 +29,15 @@ from nworks.config import load_config  # noqa: E402
 from nworks.domains import bot_send_text  # noqa: E402
 
 PORT = 8977
+MAIL_COOLDOWN = 300  # seconds between on-demand mail collections
+MAIL_LEDGER = PROJ / "output" / "stage" / "mail_대장.tsv"
+MAIL_CYCLE_LOG = PROJ / "workspace" / "mail_cycle.log"
+# Bot mentions arrive as <m userNo="...">@Display Name</m>. Any mention whose display
+# name contains "bot" addresses this bridge, so renaming the bot needs no code change.
+BOT_MENTION = re.compile(r"<m [^>]*>@[^<]*bot[^<]*</m>", re.IGNORECASE)
+MENTION_TAG = re.compile(r"<m [^>]*>@[^<]*</m>")
+_last_collect = [0.0]
+_collect_lock = threading.Lock()
 LOG = PROJ / "workspace" / "hermes_bridge.log"
 HERMES_TIMEOUT = 300
 
@@ -211,14 +222,16 @@ class Bridge(BaseHTTPRequestHandler):
         # 채널에서는 @멘션일 때만 응답 (잡담 전체에 반응 금지). 1:1은 항상 응답.
         if channel:
             low = text.lower()
-            if "{{ORG_NAME}} ax bot" not in low and not low.startswith(("!ax", "ax봇", "봇아")):
+            if ("{{ORG_NAME}} ax bot" not in low and not BOT_MENTION.search(text)
+                    and not low.startswith(("!ax", "ax봇", "봇아"))):
                 return
-            for m in ("@{{ORG_NAME}} AX Bot", "{{ORG_NAME}} ax bot", "!ax"):
+            text = MENTION_TAG.sub("", text).strip()
+            for m in ("@{{ORG_NAME}} AX Bot", "{{ORG_NAME}} ax bot", "!ax", "ax봇", "봇아"):
                 if text.lower().startswith(m.lower()):
                     text = text[len(m):].strip()
                     break
             if not text:
-                text = "안녕하세요, 무엇을 도와드릴까요? (예: 오늘 일정 / 이번주 research@ 메일 요약)"
+                text = "안녕하세요, 무엇을 도와드릴까요? (예: 메일수집 / 오늘 일정 / 이번주 research@ 메일 요약)"
 
         if uid not in self.email_cache:
             self.email_cache.update(_resolve_emails(self.client, {uid}))
@@ -226,6 +239,10 @@ class Bridge(BaseHTTPRequestHandler):
         name = self.whitelist.get(email)
         if not name:
             _log(f"비허용 발신 {email or uid} — 무응답")
+            return
+
+        if text.replace(" ", "").startswith("메일수집"):
+            self._mail_collect(channel, uid, name)
             return
 
         prefix = OPERATOR_PREFIX if email in FULL_ACCESS else READONLY_PREFIX
@@ -256,6 +273,53 @@ class Bridge(BaseHTTPRequestHandler):
             _log(f"회신({name}): {answer[:80]}")
         except Exception as e:
             _log(f"회신 실패: {str(e)[:150]}")
+
+    def _reply(self, channel, uid, text: str) -> None:
+        try:
+            if channel:
+                bot_send_text(self.client, self.cfg["bot_id"], text, channel_id=channel)
+            else:
+                bot_send_text(self.client, self.cfg["bot_id"], text, user_id=uid)
+        except Exception as e:
+            _log(f"회신 실패: {str(e)[:150]}")
+
+    def _mail_collect(self, channel, uid, name: str) -> None:
+        """Fixed action: run the mail cycle on demand. No LLM, so model usage limits do not apply.
+
+        Any allow-listed member may trigger it. Guarded by a cooldown, an in-process lock and a
+        check for a scheduled cycle that is already running.
+        """
+        wait = MAIL_COOLDOWN - (time.time() - _last_collect[0])
+        if wait > 0:
+            self._reply(channel, uid, f"방금 수집했습니다. {int(wait // 60) + 1}분 뒤 다시 요청해 주세요.")
+            return
+        running = subprocess.run(["pgrep", "-f", "nworks_cycle.py"], capture_output=True).returncode == 0
+        if running or not _collect_lock.acquire(blocking=False):
+            self._reply(channel, uid, "지금 정기 수집이 돌고 있습니다. 2~3분 뒤 메일함을 확인해 주세요.")
+            return
+        try:
+            _last_collect[0] = time.time()
+            _log(f"메일수집 요청({name})")
+            self._reply(channel, uid, "메일 수집을 시작합니다… (1~2분)")
+            before = sum(1 for _ in MAIL_LEDGER.open(encoding="utf-8")) if MAIL_LEDGER.exists() else 0
+            try:
+                subprocess.run([sys.executable, str(PROJ / "agents" / "nworks" / "nworks_cycle.py")],
+                               capture_output=True, text=True, timeout=600)
+            except subprocess.TimeoutExpired:
+                self._reply(channel, uid, "수집이 10분을 넘겨 중단했습니다. 운영자에게 알려주세요.")
+                return
+            after = sum(1 for _ in MAIL_LEDGER.open(encoding="utf-8")) if MAIL_LEDGER.exists() else 0
+            log_text = MAIL_CYCLE_LOG.read_text(encoding="utf-8") if MAIL_CYCLE_LOG.exists() else ""
+            pulls = [ln for ln in log_text.splitlines() if "pull[" in ln]
+            last = pulls[-1] if pulls else ""
+            if "401" in last or "실패" in last:
+                msg = "메일 서버 인증 오류로 수집하지 못했습니다. 운영자 확인이 필요합니다."
+            else:
+                msg = f"메일 수집 완료: 새 메일 {max(after - before, 0)}건 (요청: {name})"
+            self._reply(channel, uid, msg)
+            _log(f"메일수집 결과({name}): {msg}")
+        finally:
+            _collect_lock.release()
 
     def log_message(self, *a):
         pass
