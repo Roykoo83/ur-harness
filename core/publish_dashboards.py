@@ -32,8 +32,15 @@ from pathlib import Path
 # 2026-09-05: 서비스계정 원격(SSOT_rw)으로 이전. gdrive(rclone 공용 client_id)는 분당 쿼터
 # 상시 포화로 403 이 반복되고 2026년 중 폐기 예고됐다. lib/ssot_io 가 폴백까지 처리한다.
 RCLONE_REMOTE = "gdrive,team_drive={{SSOT_DRIVE_ID}}:"   # 폴백용(직접 사용 안 함)
-RCLONE = shutil.which("rclone") or "/opt/homebrew/bin/rclone"
+RCLONE = None            # 쓰기 직전에 _rclone() 로 찾는다
 
+def _rclone() -> str | None:
+    """rclone 경로. 못 찾으면 None — 「없음」을 가짜 경로로 숨기지 않는다."""
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[1] / "core"))
+    from lib.runtime import find_exe                          # noqa: PLC0415
+    return find_exe("rclone", env_var="RCLONE_BIN")
 
 
 def _P(name: str, sub: str = ""):
@@ -110,7 +117,7 @@ def _build_ssot_gov(b) -> bool:
     """SSOT 의 소스를 내려받아 빌드한다. 부서원과 같은 소스를 본다는 것이 핵심이다."""
     work = REPO / "state" / "dash_src" / "gov-system-manuals"
     work.mkdir(parents=True, exist_ok=True)
-    g = subprocess.run([RCLONE, "copy", f"SSOT_ro:{SSOT_GOV_SRC}", str(work),
+    g = subprocess.run([(RCLONE or _rclone()), "copy", f"SSOT_ro:{SSOT_GOV_SRC}", str(work),
                         "--exclude", "__pycache__/**"], capture_output=True, text=True)
     if g.returncode != 0:
         print(f"  ✗ SSOT 소스 내려받기 실패: {(g.stderr or '')[:200]}")

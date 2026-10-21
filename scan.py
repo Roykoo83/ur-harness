@@ -76,7 +76,14 @@ RULES: list[tuple[str, str, str]] = [
                 r"|/scripts/(nworks|agents)/",
      "저장소 안 경로나 설정의 작업공간(paths.*)으로"),
 
-    # 5 개인 환경 도구 — 특정 개인의 작업 도구가 실행 경로에 들어가면
+    # 5 특정 기계의 런타임 경로 — 다른 담당자·다른 OS 에는 없는 경로다.
+    #   `lib.runtime.find_exe()` 가 OS 별 위치를 한 곳에서 안다. 파일마다 적지 않는다.
+    ("기계 고정 런타임", r"(?i)(miniconda|anaconda)[0-9]*/bin"
+                   r"|/opt/homebrew/bin/[A-Za-z]"
+                   r"|/usr/local/bin/(rclone|python3?)\b",
+     "lib.runtime.find_exe() 로 찾는다"),
+
+    # 6 개인 환경 도구 — 특정 개인의 작업 도구가 실행 경로에 들어가면
     #   받은 사람은 없는 도구를 찾다가 막힌다. `참고/` 안에서는 허용한다(설명 대상이므로).
     # 도구 이름을 그대로 적으면 이 줄 자신이 규칙에 걸린다 — 쪼개서 붙인다
     ("개인 환경 도구",
@@ -143,6 +150,9 @@ ALLOW_LINE = re.compile(r"scan:allow")
 XML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:_-]*\s*/?>")
 
 
+# 규칙·해석기를 적은 파일은 그 규칙을 설명하느라 패턴을 품는다.
+# 네 번 반복된 자기 참조라 아예 면제한다 (대신 이 목록은 짧게 유지한다)
+SELF_FILES = {"scan.py", "runtime.py"}
 SKIP_FILE = {"scan.local.json"}
 REFERENCE_DIR = "참고"       # 설치 대상이 아닌 설명 자료
 SKIPPED: list[Path] = []   # 검사하지 않은 파일 — 끝에 반드시 보고한다          # 금지어 목록 자신 — .gitignore 대상
@@ -211,6 +221,9 @@ def walk(root: Path):
         if any(part in SKIP_DIR for part in p.parts):
             continue
         if p.name in SKIP_FILE or p.name in SKIP_NAME_EXACT or ".local." in p.name:
+            continue
+        if p.name in SELF_FILES:
+            SKIPPED.append(p)          # 조용히 빼지 않는다 — 끝에 보고된다
             continue
         # `참고/` 는 설치 대상이 아니라 설명 자료다 — 거기 적힌 도구 이름은 위반이 아니다
         if REFERENCE_DIR in p.parts:

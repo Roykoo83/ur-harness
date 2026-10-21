@@ -55,8 +55,7 @@ RECENT_DAYS = 14                           # 원격 비교가 안 되는 트리�
 RECENT_MAX_FILES = 3000                    # 그 백업의 상한 — 넘으면 멈추고 사람에게 넘긴다
 RECENT_MAX_BYTES = 3 * 2**30
 CONVERGE_TIMEOUT_H = 6
-RCLONE = shutil.which("rclone") or "/opt/homebrew/bin/rclone"
-
+RCLONE = None            # 쓰기 직전에 _rclone() 로 찾는다
 # 정밀 비교가 가능한 트리 — (마운트 경로, rclone 원격, 추가 플래그, 필수 여부)
 # required=True 면 순회를 완주하지 못하면 **초기화하지 않는다.**
 #   SSOT: 사람이 오늘 만든 작업물이 여기 있다. 반드시 완주해야 한다
@@ -74,6 +73,16 @@ WRITE_REMOTE = {
     "공유 드라이브/U": ("gdrive:", ["--drive-team-drive", U_TEAM_DRIVE]),
 }
 SKIP_NAMES = {".DS_Store", ".localized", "Icon\r"}
+
+
+
+def _rclone() -> str | None:
+    """rclone 경로. 못 찾으면 None — 「없음」을 가짜 경로로 숨기지 않는다."""
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[1] / "core"))
+    from lib.runtime import find_exe                          # noqa: PLC0415
+    return find_exe("rclone", env_var="RCLONE_BIN")
 
 
 def nfc(s: str) -> str:
@@ -107,7 +116,7 @@ def notify(msg: str) -> None:
 
 def rclone(*args, timeout=1800) -> tuple[int, str, str]:
     try:
-        p = subprocess.run([RCLONE, *args], capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run([(RCLONE or _rclone()), *args], capture_output=True, text=True, timeout=timeout)
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
         return 124, "", f"timeout {timeout}s"

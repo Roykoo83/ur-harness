@@ -3,7 +3,7 @@
 주기는 launchd `com.{{ORG_NAME}}.nworks-mail` 의 StartInterval 이 정한다 (현재 3600초 = 1시간).
 docstring 에 주기를 박아 두면 plist 를 고쳐도 문서만 낡는다 — plist 가 정본이다.
 
-launchd com.{{ORG_NAME}}.nworks-mail runs this with miniconda python3.
+스케줄러가 이 파일을 돌린다. 파이썬은 설정(install.python) 또는 PATH 의 python3.
 zsh+rsync 버전을 대체: launchd TCC(전체 디스크 접근)는 실행 바이너리 기준이므로
 python3 단일 바이너리로 고정하고, rsync 대신 shutil 동기화를 쓴다.
 - 00_raw: 추가/갱신만 (원본 불변 — 드라이브 쪽 삭제 없음)

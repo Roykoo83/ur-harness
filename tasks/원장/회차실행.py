@@ -49,16 +49,10 @@ def rclone() -> str | None:
     """rclone 실행 파일. **찾지 못하면 None 을 돌려준다 — '통과'로 치지 않는다.**
 
     2026-09 에 `shutil.which` 실패를 조용히 통과로 처리했다가 가드가 영구히 꺼졌다.
-    작동 불가와 통과는 다른 것이다.
+    OS 별 설치 위치는 `lib.runtime` 이 한 곳에서 안다 — 여기에 또 적지 않는다.
     """
-    p = shutil.which("rclone")
-    if p:
-        return p
-    for cand in ("/opt/homebrew/bin/rclone", "/usr/local/bin/rclone", "/usr/bin/rclone",
-                 r"C:\Program Files\rclone\rclone.exe"):
-        if Path(cand).is_file():
-            return cand
-    return None
+    from lib.runtime import find_exe                          # noqa: PLC0415
+    return find_exe("rclone", env_var="RCLONE_BIN")
 
 
 def run(label: str, cmd: list[str], fatal: bool = False) -> bool:

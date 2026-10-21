@@ -5,7 +5,9 @@ set -uo pipefail
 
 PROJ="$(cd "$(dirname "$0")/../.." && pwd)"   # 저장소 루트 — 코드는 여기 있다
 LOG="$PROJ/workspace/weekly.log"
-PY="${PYTHON_BIN:-$HOME/miniconda3/bin/python3}"
+# 특정 파이썬 설치본을 기본값으로 박지 않는다 — 다른 기계에는 없는 경로다.
+# PATH 의 python3 를 쓰고, 다르게 쓰려면 PYTHON_BIN 으로 지정한다.
+PY="${PYTHON_BIN:-$(command -v python3 || echo python3)}"
 command -v "$PY" >/dev/null 2>&1 || PY=python3
 mkdir -p "$PROJ/workspace"
 

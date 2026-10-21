@@ -420,6 +420,120 @@ def cmd_tasks(with_optional: list[str], all_optional: bool) -> int:
     return 1 if broken else 0
 
 
+# ── macOS launchd ──────────────────────────────────────────────────────────
+# systemd·작업 스케줄러와 **같은 정의**(services.yaml)에서 만든다.
+# 손으로 쓴 plist 는 만든 사람의 홈·파이썬 경로를 박게 되고, 담당자가 바뀌면 전부 깨진다
+# (2026-10-21 실측: 운영 plist 20개가 개인 홈·개인 파이썬·옛 프로젝트 경로를 박고 있었다).
+PLIST = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>{label}</string>
+  <key>ProgramArguments</key>
+  <array>
+{args}  </array>
+  <key>WorkingDirectory</key><string>{build}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONPATH</key><string>{build}/core:{build}/shared:{build}/agents</string>
+    <key>PATH</key><string>{path}</string>
+  </dict>
+{sched}  <key>StandardOutPath</key><string>{logs}/{name}.log</string>
+  <key>StandardErrorPath</key><string>{logs}/{name}.log</string>
+</dict>
+</plist>
+"""
+
+
+def _plist_schedule(sched: dict) -> str:
+    if sched.get("keepalive"):
+        return "  <key>KeepAlive</key><true/>\n  <key>RunAtLoad</key><true/>\n"
+    if "every" in sched:
+        return f"  <key>StartInterval</key><integer>{int(sched['every'])}</integer>\n"
+    spec = str(sched.get("calendar", ""))
+    parts = spec.split()
+    days_spec = parts[0] if len(parts) > 1 else ""
+    times = (parts[1] if len(parts) > 1 else parts[0]).split(",") if parts else []
+    order = list(DOW)
+    sel = []
+    if ".." in days_spec:
+        a, b = days_spec.lower().split("..")
+        if a in order and b in order:
+            sel = order[order.index(a):order.index(b) + 1]
+    elif days_spec:
+        sel = [d.strip().lower()[:3] for d in days_spec.split(",") if d.strip()[:3].lower() in DOW]
+    items = []
+    for tm in times:
+        tm = tm.strip()
+        if ":" not in tm:
+            continue
+        hh, mm = tm.split(":")[:2]
+        for d in (sel or [None]):
+            w = f"      <key>Weekday</key><integer>{order.index(d) + 1}</integer>\n" if d else ""
+            items.append("    <dict>\n"
+                         f"      <key>Hour</key><integer>{int(hh)}</integer>\n"
+                         f"      <key>Minute</key><integer>{int(mm)}</integer>\n"
+                         f"{w}    </dict>\n")
+    if not items:
+        return ""
+    return "  <key>StartCalendarInterval</key>\n  <array>\n" + "".join(items) + "  </array>\n"
+
+
+def cmd_launchd(with_optional: list[str], all_optional: bool) -> int:
+    """macOS launchd plist 를 만든다 — 경로는 전부 설정에서 온다."""
+    try:
+        import yaml
+    except ImportError:
+        print("pyyaml 이 필요하다: pip install pyyaml", file=sys.stderr)
+        return 2
+    defs = yaml.safe_load((REPO / "install" / "services.yaml").read_text(encoding="utf-8"))
+    out = REPO / "install" / "launchd"
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("*.plist"):
+        old.unlink()
+    logs = Path(cfg("operator.workspace", "~/ur-harness-work")).expanduser() / "logs"
+    py = cfg("install.python") or shutil.which("python3") or "/usr/bin/python3"
+    org = (cfg("org.domain") or "local").split(".")[0]
+    # PATH 를 명시한다 — launchd 는 로그인 셸의 PATH 를 물려받지 않는다
+    path = ":".join(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin"])
+    made, skipped, broken = [], [], []
+    for svc in defs.get("services", []):
+        name, sched, ex = svc["name"], svc.get("schedule", {}), svc["exec"]
+        if not (REPO / ex).is_file():
+            broken.append(f"{name} → {ex}"); continue
+        plats = svc.get("platform")
+        if plats and "darwin" not in [p.lower() for p in plats]:
+            skipped.append(f"{name} (플랫폼)"); continue
+        if svc.get("optional") and not all_optional and name not in with_optional:
+            skipped.append(f"{name} (선택)"); continue
+        runner = "/bin/bash" if ex.endswith((".sh", ".bash")) else py
+        args = (f"    <string>{runner}</string>\n"
+                f"    <string>{BUILD}/{ex}</string>\n")
+        s = _plist_schedule(sched)
+        if not s:
+            skipped.append(f"{name} (주기 해석 불가)"); continue
+        label = f"{org}.ur-{name}"
+        (out / f"{label}.plist").write_text(
+            PLIST.format(label=label, args=args, build=BUILD, path=path,
+                         sched=s, logs=logs, name=f"ur-{name}"), encoding="utf-8")
+        made.append(label)
+    if broken:
+        print(f"✗ 실행 파일이 없는 서비스 {len(broken)}개:")
+        for b in broken:
+            print(f"  · {b}")
+        print()
+    print(f"launchd plist {len(made)}개 → install/launchd/")
+    for m in made:
+        print(f"  · {m}")
+    if skipped:
+        print(f"\n건너뜀 {len(skipped)}개: {', '.join(skipped)}")
+    print(f"\n설치:\n  cp install/launchd/*.plist ~/Library/LaunchAgents/\n"
+          f"  for f in ~/Library/LaunchAgents/{org}.ur-*.plist; do "
+          f"launchctl bootstrap gui/$(id -u) \"$f\"; done\n"
+          f"  launchctl list | grep {org}.ur-        # 확인")
+    return 1 if broken else 0
+
+
 def cmd_units(with_optional: list[str], all_optional: bool) -> int:
     try:
         import yaml
@@ -495,12 +609,13 @@ def main() -> int:
     ap.add_argument("--build", action="store_true")
     ap.add_argument("--units", action="store_true", help="systemd 유닛 (Linux)")
     ap.add_argument("--tasks", action="store_true", help="작업 스케줄러 XML (Windows)")
+    ap.add_argument("--launchd", action="store_true", help="launchd plist (macOS)")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--with", dest="with_opt", action="append", default=[],
                     help="선택 서비스를 켠다 (여러 번 가능)")
     ap.add_argument("--with-optional", action="store_true", help="선택 서비스를 전부 켠다")
     a = ap.parse_args()
-    if not (a.check or a.build or a.units or a.tasks or a.all):
+    if not (a.check or a.build or a.units or a.tasks or a.launchd or a.all):
         ap.print_help()
         return 0
     rc = 0
@@ -516,7 +631,10 @@ def main() -> int:
         rc |= cmd_build()
     if a.tasks or (a.all and platform.system().lower() == "windows"):
         rc |= cmd_tasks(a.with_opt, a.with_optional)
-    if a.units or (a.all and platform.system().lower() != "windows"):
+    osname = platform.system().lower()
+    if a.launchd or (a.all and osname == "darwin"):
+        rc |= cmd_launchd(a.with_opt, a.with_optional)
+    if a.units or (a.all and osname not in ("windows", "darwin")):
         rc |= cmd_units(a.with_opt, a.with_optional)
     return rc
 

@@ -32,6 +32,16 @@ SSOTDIR = (Path.home() / "{{MOUNT_REL}}"
 
 
 
+
+def _rclone() -> str | None:
+    """rclone 경로. 못 찾으면 None — 「없음」을 가짜 경로로 숨기지 않는다."""
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib.runtime import find_exe                          # noqa: PLC0415
+    return find_exe("rclone", env_var="RCLONE_BIN")
+
+
 def _weekly_dir(sub: str = "") -> Path:
     """주간보고 데이터 경로 — 설정의 작업공간 아래. 코드 경로와 섞지 않는다."""
     import sys as _s
@@ -155,7 +165,7 @@ def main() -> int:
     where = "주간보고_초안/"
     # 클라우드 정본은 API 직행 — 로컬 마운트 동기화는 조용히 유실될 수 있다 (E24·E26)
     # 2026-09-05: 서비스계정 원격 + 도착 해시검증 (lib/ssot_io). gdrive 는 쿼터 포화.
-    rclone = shutil.which("rclone") or "/opt/homebrew/bin/rclone"
+    rclone = _rclone()
     import subprocess
     r = subprocess.run(
         [rclone, "copyto", str(out),

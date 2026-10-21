@@ -332,7 +332,7 @@ rclone lsd SSOT_ro:
 |---|---|---|
 | **Ubuntu · Linux** | `install/systemd/ur-*.service` + `.timer` | `systemctl --user enable --now` |
 | **Windows** | `install/schtasks/UR-*.xml` | `schtasks /Create /XML` |
-| **macOS** | 같은 유닛 (launchd 로 변환) | `launchctl bootstrap` |
+| **macOS** | `install/launchd/*.plist` | `launchctl bootstrap` |
 
 > **로그아웃해도 돌게 하려면** 한 가지를 더 켭니다.
 > Linux 는 `loginctl enable-linger $USER`,

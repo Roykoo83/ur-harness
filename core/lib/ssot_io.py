@@ -12,8 +12,7 @@ from __future__ import annotations
 import shutil, subprocess
 from pathlib import Path
 
-RCLONE = shutil.which("rclone") or "/opt/homebrew/bin/rclone"
-
+RCLONE = None            # 쓰기 직전에 _rclone() 로 찾는다
 # ── 쓰기 구역표 — M 안 (운영자 결정 2026-09-07) ───────────────────────────────
 # 한 경로에 쓰는 주체는 하나다. 이 창구(API)로 쓸 수 있는 곳은 아래 **기계 구역**만이다.
 # 나머지는 전부 사람(의 AI)이 마운트로 쓰는 구역이고, 자동화가 API 로 거기 쓰면
@@ -28,6 +27,16 @@ MACHINE_ZONES = (
     "{{DEPT_ROOT}}/00_부서정본/주간보고_초안/",
 )
 MACHINE_MARKERS = ("/_API스냅샷_", "/_INDEX.md", "/_동기화_확인.md")   # 경로 어디에 있어도 기계 소유
+
+
+
+def _rclone() -> str | None:
+    """rclone 경로. 못 찾으면 None — 「없음」을 가짜 경로로 숨기지 않는다."""
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib.runtime import find_exe                          # noqa: PLC0415
+    return find_exe("rclone", env_var="RCLONE_BIN")
 
 
 def in_machine_zone(rel: str) -> bool:
@@ -47,7 +56,7 @@ def _remotes() -> list[str]:
     구 원격(gdrive, rclone 공용 client_id)은 분당 쿼터 상시 포화 + 2026년 폐기 예고다.
     """
     try:
-        out = subprocess.run([RCLONE, "listremotes"], capture_output=True,
+        out = subprocess.run([(RCLONE or _rclone()), "listremotes"], capture_output=True,
                              text=True, timeout=30).stdout
         if "SSOT_rw:" in out:
             return [RW]
@@ -84,7 +93,7 @@ def put(src: Path | str, rel_dst: str, verify_after: bool = True,
     op = "copyto" if src.is_file() else "copy"
     dst = f"{remote}{rel_dst}"
     try:
-        r = subprocess.run([RCLONE, op, str(src), dst, "--drive-upload-cutoff", "64M"]
+        r = subprocess.run([(RCLONE or _rclone()), op, str(src), dst, "--drive-upload-cutoff", "64M"]
                            + (["-q"] if quiet else []),
                            capture_output=True, text=True, timeout=TIMEOUT)
         if r.returncode != 0:
@@ -99,7 +108,7 @@ def put(src: Path | str, rel_dst: str, verify_after: bool = True,
             with src.open("rb") as fh:
                 for blk in iter(lambda: fh.read(1 << 20), b""):
                     h.update(blk)
-            m = subprocess.run([RCLONE, "md5sum", dst], capture_output=True,
+            m = subprocess.run([(RCLONE or _rclone()), "md5sum", dst], capture_output=True,
                                text=True, timeout=TIMEOUT)
             if m.returncode != 0 or not m.stdout.strip():
                 return False, f"원격 해시 조회 실패: {(m.stderr or '')[-120:]}"
@@ -107,7 +116,7 @@ def put(src: Path | str, rel_dst: str, verify_after: bool = True,
             if remote_md5 != h.hexdigest():
                 return False, f"해시 불일치 (원격 {remote_md5[:12]}… ≠ 로컬 {h.hexdigest()[:12]}…)"
             return True, "업로드+해시검증 완료"
-        c = subprocess.run([RCLONE, "check", str(src), dst, "--one-way", "--checksum"]
+        c = subprocess.run([(RCLONE or _rclone()), "check", str(src), dst, "--one-way", "--checksum"]
                            + (["-q"] if quiet else []),
                            capture_output=True, text=True, timeout=TIMEOUT)
         if c.returncode != 0:
@@ -136,19 +145,19 @@ def sync_generated(src_dir: Path | str, rel_dst: str, max_delete: int = 30,
     q = ["-q"] if quiet else []
     try:
         # 1) 동명 파일이 있으면 sync 가 "duplicate object" 로 실패한다 — 먼저 정리
-        subprocess.run([RCLONE, "dedupe", "newest", dst] + q,
+        subprocess.run([(RCLONE or _rclone()), "dedupe", "newest", dst] + q,
                        capture_output=True, text=True, timeout=TIMEOUT)
         # 2) 반영 — **copy 다. sync 가 아니다.** 2026-09-08: sync 가 스테이지에 없는 파일을 지웠는데,
         #    그 폴더에 부서원이 올린 파일(10_운영OS/KSH/*, _ksh.html, _기획_*.md)이 있었다.
         #    "기계 구역이니 전부 기계 파일"이라는 가정이 틀렸다. 자동화는 자기가 만든 파일만
         #    덮어쓰고, 남의 파일은 절대 지우지 않는다. 낡은 생성물 정리가 필요하면 이름을 명시해 지운다.
-        r = subprocess.run([RCLONE, "copy", str(src), dst, "--checksum", "--exclude", ".*",
+        r = subprocess.run([(RCLONE or _rclone()), "copy", str(src), dst, "--checksum", "--exclude", ".*",
                             "--drive-upload-cutoff", "64M"] + q,
                            capture_output=True, text=True, timeout=TIMEOUT)
         if r.returncode != 0:
             return False, f"sync rc={r.returncode}: {(r.stderr or '')[-160:]}"
         # 3) 도착 검증 (한 방향 — 스테이지의 것이 전부 도착했는가. 목적지에 다른 파일이 있어도 된다)
-        c = subprocess.run([RCLONE, "check", str(src), dst, "--one-way", "--checksum",
+        c = subprocess.run([(RCLONE or _rclone()), "check", str(src), dst, "--one-way", "--checksum",
                             "--exclude", ".*"] + q,
                            capture_output=True, text=True, timeout=TIMEOUT)
         if c.returncode != 0:
@@ -165,7 +174,7 @@ def listing(rel_path: str) -> list[str] | None:
     업무무관 메일이 섞였는지 같은 판정에는 목록이 필요하다.
     """
     try:
-        r = subprocess.run([RCLONE, "lsf", "-R", "--files-only", f"{RO}{rel_path}"],
+        r = subprocess.run([(RCLONE or _rclone()), "lsf", "-R", "--files-only", f"{RO}{rel_path}"],
                            capture_output=True, text=True, timeout=300)
         if r.returncode != 0:
             return None
@@ -177,7 +186,7 @@ def listing(rel_path: str) -> list[str] | None:
 def count(rel_path: str) -> int | None:
     """SSOT 경로의 파일 수(API 기준). 마운트를 믿지 않는다."""
     try:
-        r = subprocess.run([RCLONE, "lsf", "-R", "--files-only", f"{RO}{rel_path}"],
+        r = subprocess.run([(RCLONE or _rclone()), "lsf", "-R", "--files-only", f"{RO}{rel_path}"],
                            capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
             return None
