@@ -17,7 +17,7 @@
 
 식별자 3층
   L1 mailId                    편지함 내에서만 유일 — 단독 사용 금지 (계정 간 496개 충돌)
-  L2 물리키 <접두><mailId>      파일명·SSOT 경로 (rbp-2 · 운영자-778)
+  L2 물리키 <접두><mailId>      파일명·SSOT 경로 (rbp-2 · roy-778)
   L3 논리키 uid                같은 발송 사건. sha1(sentTime|from|subject정규화)
      size 를 키에 넣지 않는 이유: 같은 메일도 편지함마다 다르다 (실측 77706 vs 77903)
 
@@ -33,10 +33,42 @@ sys.path.insert(0, str(PROJ / "agents" / "nworks"))
 from daily_brief import _load_filter, brief_skip_reason      # noqa: E402  규칙 해석은 한 곳
 
 T0 = "2026-08-12T15:29:53+09:00"
-SERIES = {                      # 계정키: (상태, SSOT 접두)
-    "{{BOT_USER}}": ("live", "rbp-"),
-    "{{OPERATOR_USER}}":   ("frozen", "운영자-"),
-}
+def _series_from_config():
+    """계열 정의 — **설정이 소유한다.** 코드의 값은 기본값일 뿐이다.
+
+    환경마다 계열이 다르다. 수집 계정을 바꿨거나 오인 수집분을 분리하면 계열이 늘어난다.
+    코드에 박아 두면 그 환경에서만 맞고, 다른 환경에서는 **다른 메일이 같은 이름으로
+    올라가 기존 파일을 덮어쓴다** (2026-10-21 실측: 접두가 겹쳐 54건이 잘못 올라갔다).
+
+        mail:
+          series:
+            <계정키>: {state: live|frozen, prefix: "bot-", from: ..., to: ...}
+
+    접두는 **ASCII 고정값**이다. 사람 이름이 아니므로 익명화 치환 대상이 아니다 —
+    바뀌면 이미 올라간 파일 수백 개와 이름이 어긋난다.
+    """
+    base = {"{{BOT_USER}}": ("live", "rbp-"), "{{OPERATOR_USER}}": ("frozen", "roy-")}
+    win = {}
+    try:
+        import sys as _s
+        from pathlib import Path as _P
+        _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+        from lib.config import cfg                            # noqa: PLC0415
+        conf = cfg("mail.series") or {}
+    except Exception:                                         # noqa: BLE001
+        conf = {}
+    if not conf:
+        return base, win
+    out = {}
+    for key, spec in conf.items():
+        if not isinstance(spec, dict):
+            continue
+        out[key] = (spec.get("state", "live"), spec.get("prefix", "mail-"))
+        win[key] = (spec.get("from"), spec.get("to"))
+    return (out or base), win
+
+
+SERIES, SERIES_WINDOW = _series_from_config()
 # 결재·품의 알림은 시스템 발신이지만 **제목에 업무 사실이 완결돼 있다** —
 # 기안자·문서종류·과제명·항목·날짜. 과제 정산과 주간보고의 1차 근거다 (운영자 결정 2026-10-01).
 # brief_filter.json 은 손대지 않는다: 부서방 브리핑은 "지금 볼 것"을 고르는 일이라
@@ -134,7 +166,7 @@ def write_ssot_index(rows: list[dict], out_dir: Path) -> int:
         "# 메일 색인", "",
         f"총 **{len(live)}건** · 수신 {span}", "",
         f"- `rbp-` 현행 계열 {ser.get('{{BOT_USER}}', 0)}건 — {{BOT_USER}}@ 수집. **여기 오는 모든 메일이 원본이다**",
-        f"- `운영자-` 과거 계열 {ser.get('{{OPERATOR_USER}}', 0)}건 — {{OPERATOR_USER}}@ 수집분 (2026-06 ~ 08/12). 고정",
+        f"- `roy-` 과거 계열 {ser.get('{{OPERATOR_USER}}', 0)}건 — {{OPERATOR_USER}}@ 수집분 (2026-06 ~ 08/12). 고정",
         "",
         f"업무와 무관한 메일(시스템 알림·마케팅·중복)은 이 폴더에 올리지 않는다. "
         f"원본은 전량 U `5. Naverworks/00_raw/mail_<계열>/` 에 있다.", "",

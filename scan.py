@@ -76,8 +76,21 @@ RULES: list[tuple[str, str, str]] = [
                 r"|/scripts/(nworks|agents)/",
      "저장소 안 경로나 설정의 작업공간(paths.*)으로"),
 
-    # 5 특정 기계의 런타임 경로 — 다른 담당자·다른 OS 에는 없는 경로다.
+    # 5 접두 손상 — 파일명 접두는 **고정 식별자**다. 사람 이름이 아니다.
+    #   익명화 치환이 `roy-` 를 사람 이름으로 보고 바꾸면, 이미 올라간
+    #   SSOT 파일 수백 개와 이름이 어긋난다 (2026-10-22 실측: 433건이 대상이었다).
+    ("접두 손상", r'\(\s*"(?:live|frozen)"\s*,\s*"[^"]*[가-힣][^"]*-"\s*\)',
+     "접두는 ASCII 고정값으로 둔다 (rbp- · roy- · bot-)"),
+
+    # 6 특정 기계의 런타임 경로 — 다른 담당자·다른 OS 에는 없는 경로다.
     #   `lib.runtime.find_exe()` 가 OS 별 위치를 한 곳에서 안다. 파일마다 적지 않는다.
+    # 6 자리표시자로 상태 경로 조립 — 치환값이 의미상 **다른 것**이면 조용히 엇나간다.
+    #   `{{WORKSPACE_NAME}}` 는 작업공간 이름이지 운영 트리 이름이 아니다. 둘을 혼용했더니
+    #   watchdog 이 `~/output/state/health.md` 에 2시간 동안 쓰고, 게이트는 그걸 못 보고
+    #   「보드가 낡았다」를 보고했다 (2026-10-22 실측). 상태·로그 경로는 lib.config 가 정한다.
+    ("자리표시자 상태경로", r'home\(\)\s*/\s*f?"\{\{[A-Z_]+\}\}[^"]*/(state|logs|output)',
+     "lib.config 의 paths.state · paths.logs 로"),
+
     ("기계 고정 런타임", r"(?i)(miniconda|anaconda)[0-9]*/bin"
                    r"|/opt/homebrew/bin/[A-Za-z]"
                    r"|/usr/local/bin/(rclone|python3?)\b",

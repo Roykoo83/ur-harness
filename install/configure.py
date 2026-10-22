@@ -441,6 +441,7 @@ PLIST = """<?xml version="1.0" encoding="UTF-8"?>
   <dict>
     <key>PYTHONPATH</key><string>{build}/core:{build}/shared:{build}/agents</string>
     <key>PATH</key><string>{path}</string>
+    <key>UR_STATE</key><string>{state}</string>
   </dict>
 {sched}  <key>StandardOutPath</key><string>{logs}/{name}.log</string>
   <key>StandardErrorPath</key><string>{logs}/{name}.log</string>
@@ -496,6 +497,13 @@ def cmd_launchd(with_optional: list[str], all_optional: bool) -> int:
     for old in out.glob("*.plist"):
         old.unlink()
     logs = Path(cfg("operator.workspace", "~/ur-harness-work")).expanduser() / "logs"
+    # 이관 중에는 옛 시스템과 **같은 상태 폴더**를 봐야 한다. 안 그러면 서비스는
+    # ok 를 쓰는데 게이트는 그걸 못 보고 실패로 읽는다
+    # launchd 는 `~` 를 풀지 않는다. 틸드를 그대로 넣으면 `./~/...` 라는
+    # 엉뚱한 폴더가 만들어지고, 서비스는 ok 를 쓰는데 아무도 그걸 못 본다
+    state_dir = str(Path(cfg("state.root") or
+                         (Path(cfg("operator.workspace", "~/ur-harness-work")) / "state")
+                         ).expanduser().resolve())
     py = cfg("install.python") or shutil.which("python3") or "/usr/bin/python3"
     org = (cfg("org.domain") or "local").split(".")[0]
     # PATH 를 명시한다 — launchd 는 로그인 셸의 PATH 를 물려받지 않는다
@@ -519,7 +527,8 @@ def cmd_launchd(with_optional: list[str], all_optional: bool) -> int:
         label = f"{org}.ur-{name}"
         (out / f"{label}.plist").write_text(
             PLIST.format(label=label, args=args, build=BUILD, path=path,
-                         sched=s, logs=logs, name=f"ur-{name}"), encoding="utf-8")
+                         state=state_dir, sched=s, logs=logs, name=f"ur-{name}"),
+            encoding="utf-8")
         made.append(label)
     if broken:
         print(f"✗ 실행 파일이 없는 서비스 {len(broken)}개:")

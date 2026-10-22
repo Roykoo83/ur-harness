@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse, csv, io, os, re, subprocess, sys, unicodedata, zipfile
 from datetime import date
 from pathlib import Path
+from lib.config import paths
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "shared"))
@@ -66,7 +67,7 @@ def extract_api(rel: str, ext: str, size: int) -> tuple[str, str]:
     """
     if size > CAP_BIN:
         return "", "크기초과"
-    tmp = Path.home() / "{{WORKSPACE_NAME}}/state/_ledger_tmp" / f"f{abs(hash(rel))%10**10}{ext}"
+    tmp = paths.state / "_ledger_tmp" / f"f{abs(hash(rel))%10**10}{ext}"
     tmp.parent.mkdir(parents=True, exist_ok=True)
     try:
         r = subprocess.run(["rclone", "copyto", f"SSOT_ro:{rel}", str(tmp), "-q"],
@@ -262,7 +263,7 @@ def main() -> int:
         print("\n[dry-run] --apply 로 기록")
         return 0
 
-    tmp = Path.home() / "{{WORKSPACE_NAME}}/state/보안대장.tsv"
+    tmp = paths.state / "보안대장.tsv"
     tmp.parent.mkdir(parents=True, exist_ok=True)
     with tmp.open("w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=HEAD, delimiter="\t", extrasaction="ignore")

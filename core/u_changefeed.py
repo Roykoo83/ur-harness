@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import hb
+from lib.config import paths
 
 SERVICE = "u-changefeed"
 KST = timezone(timedelta(hours=9))
@@ -34,7 +35,7 @@ def nfc(s: str) -> str:
 # 서비스계정 승인을 기다리는 동안 U 를 못 보는 것보다는 낫다 (2026-09-07 실측 가능 확인).
 U_REMOTES = [
     (["U_ro:"], "service_account"),
-    (["--drive-team-drive", "{{SOURCE_DRIVE_ID}}", "gdrive:"], "운영자_oauth_fallback"),
+    (["--drive-team-drive", "{{SOURCE_DRIVE_ID}}", "gdrive:"], "operator_oauth_fallback"),
 ]
 
 FETCH_VIA = None  # 실제로 성공한 경로. 산출물 각주와 하트비트에 남긴다.
@@ -117,7 +118,7 @@ def main() -> int:
         print("     {{SERVICE_ACCOUNT}} · 역할 뷰어")
         return 2
     body, n = render(items, a.days)
-    local = Path.home() / "{{WORKSPACE_NAME}}/state" / OUT_NAME
+    local = paths.state / OUT_NAME
     local.write_text(body, encoding="utf-8")
     print(f"U 전량 {len(items):,}건 · 최근 {a.days}일 변경 {n}건 · {time.time()-t0:.0f}s")
     if a.dry_run:

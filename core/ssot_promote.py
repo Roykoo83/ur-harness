@@ -49,9 +49,22 @@ ACCT = re.compile(r"(계좌번호|예금주|통장사본|입금계좌)[^\n]{0,40
 # 메일은 계열이 둘이고 **둘 다 같은 폴더**로 간다 — 접두가 둘을 구분한다.
 #   {{BOT_USER}}  live    received >= T0  매시간 증가. 커서(mailId)는 이쪽만 본다
 #   {{OPERATOR_USER}}    frozen  received <  T0  563건 고정 (2026-06~08/12). 과거 코퍼스
+# 접두는 **mail_curate.SERIES 가 소유한다.** 여기에 따로 적으면 둘이 어긋나고,
+# 어긋나면 다른 계열의 메일이 남의 이름으로 올라가 기존 파일을 덮어쓴다
+# (2026-10-21 실측: 봇 메일 54건이 개인 계열 이름으로 올라갔다).
+def _series_prefix() -> dict[str, str]:
+    """stage 폴더명 → SSOT 접두. 못 읽으면 멈춘다 — 추측하지 않는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents" / "nworks"))
+    from mail_curate import SERIES                            # noqa: PLC0415
+    return {f"mail_{k}": pre for k, (_st, pre) in SERIES.items()}
+
+
+_PRE = _series_prefix()
+
 TARGETS = [
-    ("mail_{{BOT_USER}}", "{{DEPT_ROOT}}/40_커뮤니케이션/메일", "rbp-"),
-    ("mail_{{OPERATOR_USER}}",   "{{DEPT_ROOT}}/40_커뮤니케이션/메일", "운영자-"),
+    (k, "{{DEPT_ROOT}}/40_커뮤니케이션/메일", _PRE[k]) for k in sorted(_PRE)
+] + [
     ("mail_index",    "{{DEPT_ROOT}}/40_커뮤니케이션/메일", ""),
     ("calendar",      "00_공통/20_일정/naverworks_캘린더",       ""),
     ("messenger",     "{{DEPT_ROOT}}/40_커뮤니케이션/메신저",  ""),
@@ -161,7 +174,13 @@ def promote(src_name: str, dest: str, prefix: str, dry: bool, verbose: bool,
         r["reason"] = f"정리대장 없음({LEDGER.name}) — mail_curate.py 를 먼저 돌린다"
         return r
     if not src.is_dir():
-        r["reason"] = f"원천 없음: {src}"
+        # 이미 승격이 끝난 frozen 계열은 stage 가 없다. **그것은 실패가 아니다.**
+        # 매번 fail 로 보고하면 진짜 실패가 묻히고 status 가 영영 partial 에 머문다.
+        # 다만 live 계열의 stage 가 없는 것은 진짜 문제다 — 둘을 구분한다.
+        frozen = src_name.startswith("mail_") and src_name not in (LIVE_SOURCE,)
+        r["status"] = "skip" if frozen else "fail"
+        r["reason"] = (f"해당 없음 (stage 없음 — 승격 완료된 계열): {src.name}"
+                       if frozen else f"원천 없음: {src}")
         return r
     work = Path(tempfile.mkdtemp(prefix=f"promote-{src_name}-"))
     try:
@@ -207,7 +226,8 @@ def main() -> int:
     results = [promote(s, d, p, a.dry_run, a.verbose, ledger) for s, d, p in TARGETS]
 
     for r in results:
-        mark = {"ok": "✓", "dry": "·", "fail": "✗", "blocked": "⊘"}[r["status"]]
+        mark = {"ok": "✓", "dry": "·", "fail": "✗", "blocked": "⊘",
+                "skip": "—"}.get(r["status"], "?")
         print(f"{mark} {r['source']:16} → {r['dest']}")
         f = r.get("filtered") or {}
         print(f"    파일 {r['files']}건" + (f" · 최대 id {r['max_id']}" if r.get("max_id") else "")
@@ -221,7 +241,7 @@ def main() -> int:
 
     targets = {r["source"]: r["status"] for r in results}
     total = sum(r["files"] for r in results)
-    # 커서는 **live 계열만** 본다. frozen(운영자-)은 mailId 공간이 달라 섞으면 커서가 오염된다
+    # 커서는 **live 계열만** 본다. frozen(roy-)은 mailId 공간이 달라 섞으면 커서가 오염된다
     # (운영자 최대 778 > rbp 최대 754 — 섞으면 신규 메일을 "이미 본 것"으로 오판한다).
     max_id = next((r.get("max_id", 0) for r in results if r["source"] == LIVE_SOURCE), 0)
     excl = sum(len(r["excluded"]) for r in results)
@@ -242,7 +262,9 @@ def main() -> int:
                    needs="mail_curate.py 실행")
         print(f"\n막힘 — {targets}")
         return 2
-    oks = [s for s, st in targets.items() if st == "ok"]
+    # skip = 「해당 없음」이다. 실패가 아니다 — 이것을 실패로 세면
+    # 승격이 매번 성공해도 status 가 영영 partial 에 머물고, 게이트가 그것을 위반으로 본다
+    oks = [s for s, st in targets.items() if st in ("ok", "skip")]
     if len(oks) == len(results):
         hb.ok(SERVICE, cursor=cursor, outputs=outputs, counters=counters)
         print(f"\n승격 완료 {total}건 · 업무무관 {off}건 제외 · 대장미등재 {pend}건 보류 "

@@ -116,3 +116,15 @@ install:
 #   `{title}` · `{path}` 를 쓸 수 있다. 참고: 참고/개인_운영환경_패턴.md
 workspace:
   open_command: ""
+
+# legacy — 이관 전 시스템이 있는 곳. 이관이 끝나면 지운다.
+#   remediate.py 가 옛 게이트·데이터를 찾는 데만 쓴다
+legacy:
+  root: ""
+  mail_output: ""
+  mail_scripts: ""        # 옛 트리의 mail_curate.py 위치 (install/remediate.py 만 쓴다)
+
+# state — 하트비트·커서가 쌓이는 곳. 비우면 작업공간 아래.
+#   이관 중에는 옛 시스템과 같은 곳을 봐야 게이트가 서비스 상태를 읽는다
+state:
+  root: ""

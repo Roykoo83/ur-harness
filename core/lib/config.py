@@ -188,6 +188,17 @@ class _Paths:
 
     @property
     def state(self) -> Path:
+        """Heartbeats, cursors, boards.
+
+        `state.root` wins when set: the operating tree may keep state outside
+        the workspace, and launchd passes the same value as UR_STATE. Deriving
+        it from the workspace instead silently writes to a second directory
+        that nothing reads.
+        """
+        if (v := os.environ.get("UR_STATE")):
+            return Path(v)
+        if (v := cfg("state.root")):
+            return Path(v).expanduser()
         return self.workspace / "state"
 
     @property
@@ -204,8 +215,21 @@ class _Paths:
         return self.workspace / "stage"
 
     def raw(self, kind: str = "") -> Path:
-        """수집 원본 (mail · messenger · calendar). 불변 로그로 다룬다."""
-        return self.workspace / "raw" / kind if kind else self.workspace / "raw"
+        """수집 원본 (mail · messenger · calendar). 불변 로그로 다룬다.
+
+        두 가지 배치를 모두 받는다 — `raw/<종류>` 와 `raw_<종류>`.
+        운영 트리가 후자이기 때문이다. **있는 쪽을 쓴다.**
+        없는 쪽을 가리키면 빈 폴더를 읽고 「0건」을 사실로 보고하게 된다.
+        """
+        if not kind:
+            return self.workspace / "raw"
+        nested = self.workspace / "raw" / kind
+        flat = self.workspace / f"raw_{kind}"
+        if nested.is_dir():
+            return nested
+        if flat.is_dir():
+            return flat
+        return nested                       # 둘 다 없으면 표준 배치를 돌려준다
 
     @property
     def ledger(self) -> Path:

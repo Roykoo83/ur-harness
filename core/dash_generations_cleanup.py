@@ -19,8 +19,9 @@
 from __future__ import annotations
 import argparse, hashlib, json, os, re, subprocess, unicodedata
 from pathlib import Path
+from lib.config import paths
 
-STAGE = Path.home() / "{{WORKSPACE_NAME}}/state/dash_stage"
+STAGE = paths.state / "dash_stage"
 BASE = "{{DEPT_ROOT}}/50_대시보드"
 BOARDS = ["10_운영OS", "20_정부과제시스템"]
 RO, RW = "SSOT_ro:", "SSOT_rw:"

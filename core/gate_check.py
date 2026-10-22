@@ -35,6 +35,32 @@ def _P(name: str, sub: str = ""):
     return (v / sub) if sub else v
 
 
+def _mail_curate():
+    """접두·계열 경계의 소유자. 세 곳에 따로 적으면 어긋나고,
+    어긋나면 게이트가 정상인 것을 위반으로 보고한다."""
+    import sys as _s
+    d = str(HARNESS / "agents" / "nworks")
+    if d not in _s.path:
+        _s.path.insert(0, d)
+    import mail_curate                                        # noqa: PLC0415
+    return mail_curate
+
+
+def _mail_key_re() -> str:
+    """파일명에서 **대장 키**(`bot-1160`)를 뽑는 식. 뒤의 `_` 는 포함하지 않는다."""
+    pres = [pr.rstrip("-") for _st, pr in _mail_curate().SERIES.values()]
+    return r"/((?:" + "|".join(sorted(set(pres))) + r")-\d+)_"
+
+
+def _mail_prefix_re() -> str:
+    pres = [pr.rstrip("-") for _st, pr in _mail_curate().SERIES.values()]
+    return r"/(?:" + "|".join(sorted(set(pres))) + r")-\d+_"
+
+
+def _series_windows() -> dict:
+    return getattr(_mail_curate(), "SERIES_WINDOW", {})
+
+
 def chk(phase: str, name: str, ok: bool | None, detail: str) -> None:
     R.append({"phase": phase, "check": name,
               "result": "PASS" if ok else ("BLOCKED" if ok is None else "FAIL"),
@@ -96,7 +122,7 @@ def w2() -> None:
         else:
             import re as _re
             have = {m.group(1) for f in api_files
-                    if (m := _re.search(r"((?:rbp|운영자)-\d+)_", f))}
+                    if (m := _re.search(_mail_key_re(), "/" + f))}
             missing, leaked = wantY - have, wantN & have
             orphan = have - wantY - wantN
             # S3(본문에 실제 계좌·주민번호)는 설계상 제외 — 소수의 missing 은 허용
@@ -109,16 +135,22 @@ def w2() -> None:
                 + (f" {sorted(missing)[:3]}" if missing else "") + " (S3제외·직전주기 허용 10)")
             # 접두 없는 메일 파일은 존재하지 않아야 한다 — 폐지된 research 계열의 흔적
             noprefix = [f for f in api_files if f.endswith(".md")
-                        and "/" in f and not _re.search(r"/(?:rbp|운영자)-\d+_", f)]
+                        and "/" in f and not _re.search(_mail_prefix_re(), f)]
             chk("W2", "접두 없는 메일 파일 0건", not noprefix,
                 f"{len(noprefix)}건" + (f": {noprefix[:2]}" if noprefix else ""))
         # 계열 경계 — frozen 이 늘거나 live 가 T0 이전을 받으면 분리가 깨진 것
-        T0 = "2026-08-12T15:29:53+09:00"
-        bad = [r for r in led
-               if (r["series"] == "{{OPERATOR_USER}}") != (r["received"] < T0) and r["received"] != T0]
+        # 경계는 mail_curate.SERIES_WINDOW 가 소유한다 — 여기에 또 적지 않는다.
+        # 계열이 늘 때(2026-10-21 봇 계열 추가) 하나의 T0 로 재면 거짓 위반이 난다
+        _w = _series_windows()
+        bad = []
+        for r in led:
+            lo, hi = _w.get(r["series"], (None, None))
+            rt = r["received"]
+            if rt and ((lo and rt < lo) or (hi and rt > hi)):
+                bad.append(r)
         froz = sum(1 for r in led if r["series"] == "{{OPERATOR_USER}}")
-        chk("W2", "계열 경계(T0) 무결", not bad and froz == 563,
-            f"frozen {froz}/563 · 경계위반 {len(bad)}")
+        chk("W2", "계열 경계 무결", not bad,
+            f"frozen {froz} · 경계위반 {len(bad)}")
     # 메일 단일화 — research 분기 잔존 0
     hits = []
     # mail_collector.py 가 빠져 있어 거기서만 research 분기가 살아남았다 (2026-09-28 발견).
@@ -182,15 +214,21 @@ def w3() -> None:
     ALLOW = {  # 마운트 참조가 설계상 정당한 파일 (이유를 코드에 남긴다)
         "watchdog.py": "④ 정합성 검사가 마운트를 대조 대상으로 읽는다",
         "gate_check.py": "이 판정기 자신",
-        "ssot_push.py": "마운트를 읽어 클라우드로 올리는 보정기",
+        "ssot_push.py": "마운트를 읽어 클라우드로 올리던 보정기 — 퇴역(2026-09-07), 수렴 검사가 대신한다",
         "nworks_hermes_bridge.py": "프롬프트 문자열(경로 안내) — 코드가 읽지 않는다",
         "new-project.py": "사람이 1회 실행하는 개설 도구 (launchd 아님)",
         "hr_sync_check.py": "주 1회 아카이브 4,147건 훑기 — API 전환이 더 위험",
         "publish_dashboards.py": "로컬 미러 유지 + 업로드는 API(cloud_put→ssot_io)",
-        "sync_budget_status.py": "마운트 쓰기 + ssot-push 시간당 보정",
-        "build_budget_dataset.py": "마운트 쓰기 + ssot-push 시간당 보정",
+        "sync_budget_status.py": "마운트 쓰기 — ssot-push 퇴역(2026-09-07) 후 DriveFS 가 올린다",
+        "build_budget_dataset.py": "마운트 쓰기 — ssot-push 퇴역(2026-09-07) 후 DriveFS 가 올린다",
         "make_weekly_pptx.py": "로컬 경로 상수 · 업로드는 SSOT_rw",
-        "extract_observed.py": "SSOT 산출물 관측 · ssot-push 보정 범위 내",
+        "extract_observed.py": "SSOT 산출물 관측 — 읽기만 한다",
+        "roster_sync.py": "네이버웍스 조직도를 온톨로지 `사람/`에 반영 — 마운트 쓰기, DriveFS 가 올린다",
+        "drivefs_resync.py": "마운트 자체가 대상인 복구 도구 (사람이 승인 후 1회 실행)",
+        "ledger_rebuild.py": "보안대장 재등재 — SSOT 본문을 읽어 등급을 매긴다 (사람 실행)",
+        "build_id_sheet.py": "과제 폴더의 샘플 ID 현황표 생성 (사람 실행)",
+        "온톨로지수확.py": "온톨로지 성장분 **제안**만 만든다 — 쓰지 않는다 (사람 실행)",
+        "원장생성.py": "운영 OS 원장 회차 생성 — 마운트 쓰기 (사람 실행)",
     }
     CODE_EXT = (".py", ".sh")
     try:
@@ -213,13 +251,23 @@ def w3() -> None:
         + f" · 문서화된 예외 {len(ALLOW)}개")
     chk("W3", "U 마운트 참조", None if u_ref else True,
         f"{len(u_ref)}곳 — U 서비스계정 권한 대기(BLOCKED)")
-    # 진짜 안전 속성 ①: 배포 보정기가 살아 있는가
+    # 진짜 안전 속성 ①: 마운트에 쓴 것이 클라우드에 도달하는가
+    #
+    # 이 질문을 전에는 보정기(ssot-push)가 살아 있는지로 재었다. 그 보정기는
+    # **퇴역했다** — 재업로드가 DriveFS 와 경합해 Drive 에 동명 사본을 만들었다
+    # (2026-09-07, 사유는 하트비트에 남아 있다). 퇴역한 것을 계속 ok 로 요구하면
+    # 게이트에 영원히 꺼지지 않는 빨간불이 생기고, 그러면 사람이 게이트를 안 본다.
+    # 그래서 **항목은 남기되** 기록된 결정 위에서 재고, 실제 안전 속성은 바로 아래
+    # 수렴(해시 양방향) 검사가 짊어진다.
     d = hb.read("ssot-push")
     age = hb.age_min(d) if d else None
+    retired = bool(d) and d.get("status") == "blocked" and "퇴역" in str(d.get("reason", ""))
     fresh = bool(d) and d.get("status") == "ok" and age is not None and age <= 90
-    chk("W3", "마운트→클라우드 배포 보정기 가동", fresh,
-        f"ssot-push status={d.get('status') if d else '없음'}"
-        + (f" · {age:.0f}분 전 (허용 90분)" if age is not None else " · 시각 불명"))
+    chk("W3", "마운트→클라우드 배포 경로", fresh or retired,
+        (f"ssot-push 퇴역 — {str(d.get('reason'))[:60]} · 수렴 검사가 대신 잰다"
+         if retired else
+         f"ssot-push status={d.get('status') if d else '없음'}"
+         + (f" · {age:.0f}분 전 (허용 90분)" if age is not None else " · 시각 불명")))
     # 유령 파일 (삭제 미전파의 결과) — 있으면 드러낸다
     gp = REPO / "state/ssot_ghosts.json"
     ng = 0

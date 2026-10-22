@@ -13,7 +13,23 @@ from __future__ import annotations
 import json, os, socket, tempfile, time
 from pathlib import Path
 
-ROOT = Path(os.environ.get("UR_STATE", Path.home() / "{{WORKSPACE_NAME}}" / "state"))
+def _state_root() -> Path:
+    """하트비트가 쌓일 곳 — **설정의 작업공간 아래**.
+
+    예전에는 홈 밑 고정 폴더명을 썼다. 토큰이 치환되며 엉뚱한 경로가 되어
+    서비스는 ok 를 쓰는데 게이트는 그걸 못 보고 partial 로 읽었다
+    (2026-10-22 실측). 경로는 한 곳(lib.config.paths)이 정한다.
+    """
+    if (v := os.environ.get("UR_STATE")):
+        return Path(v)
+    try:
+        from lib.config import paths                          # noqa: PLC0415
+        return paths.state
+    except Exception:                                         # noqa: BLE001
+        return Path.home() / ".ur-harness" / "state"
+
+
+ROOT = _state_root()
 HB_DIR = ROOT / "heartbeat"
 SCHEMA_VERSION = "hb/1.0"
 

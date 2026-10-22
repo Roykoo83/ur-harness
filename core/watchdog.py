@@ -38,7 +38,7 @@ def _P(name: str, sub: str = ""):
 
 
 SERVICE = "watchdog"
-STATE = Path.home() / "{{WORKSPACE_NAME}}/state"
+STATE = _P("state")
 ALERTS = STATE / "alerts"
 SUPPRESS_H = 6
 NWORKS = _P("workspace")
