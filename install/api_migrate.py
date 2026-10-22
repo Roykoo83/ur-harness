@@ -60,7 +60,28 @@ TARGETS: list[tuple[str, str, int, str]] = [
      "마운트 대신 SSOT 상대경로로 적는다"),
 ]
 
-TIER_NAME = {1: "1-읽기", 2: "2-기계쓰기", 3: "3-판정재정의"}
+TIER_NAME = {1: "1-읽기", 2: "2-기계쓰기", 3: "3-판정재정의", 4: "4-남은서비스"}
+
+# 하네스에 아직 대응본이 없는 것. 설문이 `.py` 만 보던 동안 빠져 있었다
+# 마운트 참조가 설계상 정당한 것. **사유 없이 목록에 올리지 않는다** —
+# 사유 없는 면제가 쌓이면 설문이 아무것도 못 잡는다
+LEGITIMATE: dict[str, str] = {
+    "install/api_migrate.py": "이 설문 자신 — 찾는 패턴을 품고 있다",
+    "install/configure.py": "토큰 사전 — MOUNT_ROOT 를 **정의하는** 곳",
+    "skills/works/works_env.py": "주석. 드라이브 폴더명이 계정 언어에 따라 다른 사정을 적었다",
+    "skills/dash/works_env.py": "주석. 위와 같다",
+    "tasks/tasks/extract_observed.py": "SSOT 산출물을 읽기만 한다 (사람 실행)",
+    "tasks/tasks/make_weekly_pptx.py": "로컬 경로 상수 · 업로드는 API (사람 실행)",
+    "tasks/원장/온톨로지수확.py": "제안만 만든다 — 쓰지 않는다 (사람 실행)",
+    "tasks/원장/원장생성.py": "운영 OS 원장 회차 생성 (사람 실행) — 자동 스케줄 아님",
+}
+
+NOT_YET: list[tuple[str, str]] = [
+    ("com.urban.rpb-daily (~/<운영트리>/scripts/rpb-daily.sh)",
+     "지금도 도는 서비스. 마운트 절대경로가 기본값이고, **실행하는 파이썬 코드가 "
+     "U 아카이브 폴더 안에 있다**(`$ARCHIVE/scan_projects.py`). 코드를 하네스로 "
+     "옮기는 것이 먼저다 — 코드가 데이터 폴더에 있으면 누가 고쳤는지도 알 수 없다"),
+]
 
 
 def load() -> dict:
@@ -80,12 +101,22 @@ def save(st: dict) -> None:
 def mount_refs() -> dict[str, list[int]]:
     """지금 마운트를 참조하는 줄. 플레이스홀더가 아니라 **실제 사용**만 센다."""
     out: dict[str, list[int]] = {}
-    pat = re.compile(r"\bMOUNT\b(?!_ROOT|_REL)|\{\{MOUNT_(?:ROOT|REL)\}\}")
-    for d in ("core", "agents", "shared"):
-        for f in sorted((REPO / d).rglob("*.py")):
+    # `.py` 만 보면 셸 스크립트가 조용히 빠진다 — 실제로 빠졌다(rpb-daily.sh,
+    # 2026-10-22). 마운트 경로를 담을 수 있는 확장자는 전부 본다
+    pat = re.compile(r"\bMOUNT\b(?!_ROOT|_REL)|\{\{MOUNT_(?:ROOT|REL)\}\}"
+                     r"|CloudStorage/GoogleDrive|공유 드라이브/")
+    EXTS = (".py", ".sh", ".bash", ".zsh", ".plist", ".yaml", ".yml", ".json")
+    for d in ("core", "agents", "shared", "install", "tasks", "skills"):
+        root = REPO / d
+        if not root.is_dir():
+            continue
+        for f in sorted(x for x in root.rglob("*") if x.suffix in EXTS):
             rel = str(f.relative_to(REPO))
-            hits = [i for i, ln in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
-                    if pat.search(ln)]
+            try:
+                lines = f.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                continue
+            hits = [i for i, ln in enumerate(lines, 1) if pat.search(ln)]
             if hits:
                 out[rel] = hits
     return out
@@ -123,11 +154,22 @@ def cmd_check() -> int:
             if n:
                 print(f"              → {how}")
         print()
-    extra = sorted(set(refs) - {f for f, *_ in TARGETS})
+    if NOT_YET:
+        print("  [4-남은서비스] 하네스에 대응본이 없다 — 옮기기 전에 설계가 필요하다")
+        for what, why in NOT_YET:
+            print(f"      · {what}")
+            for ln in (why[i:i+76] for i in range(0, len(why), 76)):
+                print(f"          {ln}")
+        print()
+    extra = sorted(set(refs) - {f for f, *_ in TARGETS} - set(LEGITIMATE))
     if extra:
-        print("  계획에 없는 참조 — 조사해서 TARGETS 에 적는다:")
+        print("  계획에 없는 참조 — 조사해서 TARGETS 또는 LEGITIMATE 에 적는다:")
         for f in extra:
             print(f"      {f}:{refs[f][:4]}")
+        print()
+    ok = sorted(set(refs) & set(LEGITIMATE))
+    if ok:
+        print(f"  설계상 정당한 참조 {len(ok)}건 (사유 기록됨)")
     return 0
 
 
