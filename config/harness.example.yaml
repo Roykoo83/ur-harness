@@ -128,3 +128,20 @@ legacy:
 #   이관 중에는 옛 시스템과 같은 곳을 봐야 게이트가 서비스 상태를 읽는다
 state:
   root: ""
+
+# api — Drive API 자격. 마운트가 아니라 API 로 읽고 쓴다
+api:
+  service_account: ""   # 공유 드라이브 멤버로 등록된 서비스계정 키
+
+# u — U 공유 드라이브. **API 로만 읽는다** (마운트를 쓰지 않는다).
+#   remote: U 를 읽는 rclone 원격 이름. 서비스계정이 U 멤버가 되면 그 원격으로 바꾼다
+#   stage : 받아서 펼쳐 둘 로컬 폴더. 비우면 상태 폴더 아래 u_stage
+u:
+  remote: ""
+  stage: ""
+  paths:
+    naverworks: ""
+    budget_status: ""
+    active_projects: ""
+    archive: ""
+  mirror_ok: []   # 지우는 동기화를 허용할 경로만. 비우면 전부 copy

@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import hb
-from lib.config import paths
+from lib.config import cfg, paths
 
 SERVICE = "u-changefeed"
 KST = timezone(timedelta(hours=9))
@@ -33,10 +33,17 @@ def nfc(s: str) -> str:
 # U 를 읽는 두 경로. 서비스계정이 U 멤버가 되면 첫 항목만 쓰인다.
 # 두 번째는 운영자 개인 OAuth 토큰 — 공용 client_id 쿼터를 쓰므로 쓰지 않는 것이 좋지만,
 # 서비스계정 승인을 기다리는 동안 U 를 못 보는 것보다는 낫다 (2026-09-07 실측 가능 확인).
-U_REMOTES = [
-    (["U_ro:"], "service_account"),
-    (["--drive-team-drive", "{{SOURCE_DRIVE_ID}}", "gdrive:"], "operator_oauth_fallback"),
-]
+def _u_remotes() -> list[tuple[list[str], str]]:
+    """U 를 읽는 경로. **설정이 정한다** — 코드에 원격 이름을 박지 않는다.
+
+    서비스계정은 U 공유 드라이브 멤버가 아니다(404, 2026-10-22 실측). 멤버로
+    등록되면 설정의 `u.remote` 만 그 원격으로 바꾸면 코드는 그대로 돈다.
+    """
+    from lib import u_api                                      # noqa: PLC0415
+    return [([u_api.remote()], cfg("u.remote") or "u.remote")]
+
+
+U_REMOTES = _u_remotes()
 
 FETCH_VIA = None  # 실제로 성공한 경로. 산출물 각주와 하트비트에 남긴다.
 

@@ -61,6 +61,32 @@ def _series_windows() -> dict:
     return getattr(_mail_curate(), "SERIES_WINDOW", {})
 
 
+def _scheduled_roots() -> list[str]:
+    """launchd 가 실제로 실행하는 코드 뿌리들.
+
+    「마운트를 참조한다」와 「그 코드가 돈다」는 다르다. 이관이 끝나면 옛 사본은
+    남아 있어도 아무도 실행하지 않는다 — 그걸 위반으로 세면 게이트가 죽은 코드를
+    보고하고, 사람은 게이트를 안 읽는다. 목록을 믿지 않고 plist 를 직접 읽는다.
+    """
+    import plistlib
+    roots: list[str] = []
+    d = Path.home() / "Library/LaunchAgents"
+    if not d.is_dir():
+        return roots
+    for p in sorted(d.glob("*.plist")):
+        try:
+            j = plistlib.load(p.open("rb"))
+        except Exception:                                    # noqa: BLE001
+            continue
+        roots += [a for a in j.get("ProgramArguments", []) if a.startswith("/")]
+        roots += (j.get("EnvironmentVariables", {}) or {}).get("PYTHONPATH", "").split(":")
+    return [r for r in roots if r]
+
+
+def _is_scheduled(f: str) -> bool:
+    return any(f.startswith(r.rstrip("/") + "/") or f == r for r in _scheduled_roots())
+
+
 def chk(phase: str, name: str, ok: bool | None, detail: str) -> None:
     R.append({"phase": phase, "check": name,
               "result": "PASS" if ok else ("BLOCKED" if ok is None else "FAIL"),
@@ -69,7 +95,7 @@ def chk(phase: str, name: str, ok: bool | None, detail: str) -> None:
 
 # ── W1 ────────────────────────────────────────────────────────────────
 def w1() -> None:
-    sa = Path.home() / ".rpb/sa_{{WORKSPACE_SLUG}}.json"
+    sa = _P("service_account")
     chk("W1", "서비스계정 키 존재", sa.exists() and oct(sa.stat().st_mode)[-3:] == "600",
         f"{sa} · 권한 {oct(sa.stat().st_mode)[-3:] if sa.exists() else '없음'}")
     try:
@@ -249,8 +275,15 @@ def w3() -> None:
     chk("W3", "마운트 참조가 전부 문서화된 예외인가", not undoc,
         f"미문서화 {len(undoc)}: " + ("; ".join(Path(f).name for f in undoc) or "0")
         + f" · 문서화된 예외 {len(ALLOW)}개")
-    chk("W3", "U 마운트 참조", None if u_ref else True,
-        f"{len(u_ref)}곳 — U 서비스계정 권한 대기(BLOCKED)")
+    # U 는 **API 로** 읽는다 (2026-10-22 전환). 마운트 참조가 남아 있으면
+    # 그 코드는 이 기계에서만 돌고 다음 인수인계자의 기계에서는 조용히 빈 결과를 낸다.
+    # 「권한 대기」로 BLOCKED 처리하던 예전 판정은 기다릴 것이 없어졌으므로 쓰지 않는다
+    u_live = [f for f in u_ref if _is_scheduled(f)]
+    u_dead = [f for f in u_ref if f not in u_live]
+    chk("W3", "U 를 API 로 읽는다 (도는 코드에 마운트 참조 0건)", not u_live,
+        (f"도는 코드에 {len(u_live)}곳: {'; '.join(Path(f).name for f in u_live[:3])}"
+         if u_live else "도는 코드는 전부 u_api 경유")
+        + (f" · 실행되지 않는 옛 사본 {len(u_dead)}곳(이관 잔재)" if u_dead else ""))
     # 진짜 안전 속성 ①: 마운트에 쓴 것이 클라우드에 도달하는가
     #
     # 이 질문을 전에는 보정기(ssot-push)가 살아 있는지로 재었다. 그 보정기는

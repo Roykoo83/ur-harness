@@ -244,6 +244,17 @@ class _Paths:
         return self.workspace / "weekly"
 
     @property
+    def service_account(self) -> Path:
+        """Drive API 자격. 설정이 소유한다.
+
+        예전에는 작업공간 폴더 이름으로 조립했다(`sa_{slug}.json`). 그 이름이
+        `output` 이어서 `sa_output.json` 을 찾았고, 키는 있는데 「키 없음」이
+        보고됐다 (2026-10-22 실측).
+        """
+        v = cfg("api.service_account")
+        return Path(v).expanduser() if v else Path.home() / ".rpb/sa.json"
+
+    @property
     def mount_root(self) -> Path | None:
         v = cfg("operator.mount_root")
         return Path(v).expanduser() if v else None

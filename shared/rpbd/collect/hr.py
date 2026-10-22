@@ -10,11 +10,25 @@ import openpyxl
 
 from rpbd.collect.base import Collector, RunContext, make_record
 
-DEFAULT_HR_EXCEL_PATH = (
-    "{{MOUNT_ROOT}}/"
-    "공유 드라이브/U/2. R&D 사업/2-3. 수행중인 사업/"
-    "어반 인력 및 과제 참여율 현황_260722.xlsx"
-)
+def default_hr_excel_path() -> str:
+    """인력 현황 엑셀 — U 에서 API 로 받은 로컬 사본의 경로.
+
+    파일명은 설정이 소유한다(`u.files.hr_excel`). 날짜가 박힌 이름이라
+    코드에 두면 갱신될 때마다 코드를 고쳐야 한다.
+    """
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[3] / "core"))
+    from lib import u_api                                      # noqa: PLC0415
+    from lib.config import cfg, require                        # noqa: PLC0415
+    base = u_api.stage(require("u.paths.active_projects"))
+    name = cfg("u.files.hr_excel")
+    if name:
+        return str(base / name)
+    xl = sorted(base.glob("*인력*참여율*.xlsx")) or sorted(base.glob("*.xlsx"))
+    if not xl:
+        raise u_api.UnavailableError(f"인력 현황 엑셀을 찾지 못했다: {base}")
+    return str(xl[-1])
 
 # Relative source path for C1 record provenance
 RELATIVE_SOURCE_PATH = (
@@ -97,7 +111,7 @@ class HRCollector:
     name: str = "hr"
 
     def __init__(self, excel_path: Optional[str] = None):
-        self.excel_path = excel_path or DEFAULT_HR_EXCEL_PATH
+        self.excel_path = excel_path or default_hr_excel_path()
 
     def collect(self, ctx: RunContext) -> Iterator[dict[str, Any]]:
         """Collect person and project allocation records from HR excel workbook."""

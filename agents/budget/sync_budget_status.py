@@ -21,8 +21,13 @@ from pathlib import Path
 import openpyxl
 
 HOME = Path.home()
-SRC = (HOME / "{{MOUNT_REL}}"
-       / "공유 드라이브/U/2. R&D 사업/2-7. 각 사업 예산 현황")
+def _src() -> Path:
+    """예산 현황 원본 — U 에서 API 로 받는다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib import u_api                                      # noqa: PLC0415
+    from lib.config import require                             # noqa: PLC0415
+    return u_api.stage(require("u.paths.budget_status"))
 OUT = Path(__file__).resolve().parents[1] / "data" / "예산현황"
 # 2026-09-05: 마운트 쓰기는 유지하되 **도착을 API 해시로 검증**한다(lib/ssot_io.verify_dir).
 # 업로드 rc=0 은 도착의 증거가 아니다 — "☁ 반영"이 거짓이던 지점.
@@ -38,7 +43,7 @@ def latest_source() -> tuple[Path, str] | None:
     """파일명 YYMMDD 가 가장 큰 「예산 현황」 파일. mtime 이 아니라 **파일명 날짜**가
     기준이다 — 드라이브 동기화가 mtime 을 흔든다."""
     best = None
-    for f in SRC.glob("*.xlsx"):
+    for f in _src().glob("*.xlsx"):
         name = nfc(f.name)
         if "예산 현황" not in name and "예산현황" not in name:
             continue
@@ -83,7 +88,7 @@ def snapshot(f: Path) -> dict:
 def main() -> int:
     src = latest_source()
     if not src:
-        print("원천 파일 없음:", SRC)
+        print("원천 파일 없음:", _src())
         return 2
     f, ymd = src
     OUT.mkdir(parents=True, exist_ok=True)

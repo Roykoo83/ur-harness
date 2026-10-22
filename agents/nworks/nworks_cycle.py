@@ -5,20 +5,17 @@ docstring 에 주기를 박아 두면 plist 를 고쳐도 문서만 낡는다 �
 
 스케줄러가 이 파일을 돌린다. 파이썬은 설정(install.python) 또는 PATH 의 python3.
 zsh+rsync 버전을 대체: launchd TCC(전체 디스크 접근)는 실행 바이너리 기준이므로
-python3 단일 바이너리로 고정하고, rsync 대신 shutil 동기화를 쓴다.
+python3 단일 바이너리로 고정한다. U 로는 rclone(API)로 올린다 — 마운트를 쓰지 않는다.
 - 00_raw: 추가/갱신만 (원본 불변 — 드라이브 쪽 삭제 없음)
 - 10_stage: 미러 (로컬에 없는 파일은 드라이브에서도 삭제)
 """
 import datetime
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 PROJ = Path(__file__).resolve().parents[2]
-FOUNDRY = Path.home() / ("{{MOUNT_REL}}/"
-                         "공유 드라이브/U/5. Naverworks")
 LOG = PROJ / "workspace" / "mail_cycle.log"
 PY = sys.executable
 
@@ -97,38 +94,6 @@ def _watch_auth(desc: str, r) -> None:
         except Exception as e:
             log(f"UA 장애 경고 실패: {str(e)[:120]}")
     _AUTH_STATE.write_text(_j.dumps(st))
-
-
-def sync_tree(src: Path, dst: Path, mirror: bool) -> int:
-    """Copy new/changed files src->dst; mirror=True deletes dst files absent in src."""
-    n = 0
-    if not src.exists():
-        return 0
-    for f in src.rglob("*"):
-        if not f.is_file():
-            continue
-        rel = f.relative_to(src)
-        d = dst / rel
-        try:
-            # 드라이브 파일은 절대 읽지 않는다 — 클라우드 전용 파일 materialize가
-            # launchd 컨텍스트에서 EDEADLK를 유발. 크기+수정시각(stat)으로만 비교.
-            if d.exists():
-                ds, fs = d.stat(), f.stat()
-                if ds.st_size == fs.st_size and abs(ds.st_mtime - fs.st_mtime) < 2:
-                    continue
-                d.unlink()  # dataless 파일 덮어쓰기는 EDEADLK — 삭제 후 새로 쓴다
-            d.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(f, d)
-            n += 1
-        except OSError as e:
-            log(f"sync 파일 건너뜀 {rel}: {e}")
-            sync_tree.skipped = getattr(sync_tree, "skipped", 0) + 1
-    if mirror and dst.exists():
-        for f in dst.rglob("*"):
-            if f.is_file() and not (src / f.relative_to(dst)).exists():
-                f.unlink()
-                n += 1
-    return n
 
 
 def _enable_dataless_materialization() -> None:
@@ -231,41 +196,44 @@ def main() -> None:
     run("calendar", [PY, str(PROJ / "agents" / "nworks" / "calendar_collector.py")])
     log(f"messenger stage: {build_messenger_stage()}건")
 
-    if not (FOUNDRY / "00_raw").exists():
-        log(f"sync SKIP: 드라이브 미마운트/권한 없음 ({FOUNDRY})")
-        alert_operator(f"드라이브 미마운트/권한 없음 — 동기화 건너뜀\n{FOUNDRY}")
+    # U 로는 **API 로** 올린다. 마운트는 이 기계에만 있고, 업로드가 서면
+    # 올린 줄 알고 넘어간다 (2026-10-22 실측: 마운트 쓰기가 3시간 안 올라갔다)
+    try:
+        from lib import u_api                                  # noqa: PLC0415
+        from lib.config import require                         # noqa: PLC0415
+        U = require("u.paths.naverworks")
+    except Exception as e:                                     # noqa: BLE001
+        log(f"sync SKIP: U 를 API 로 열 수 없다 — {e}")
+        alert_operator(f"U API 접근 실패 — 동기화 건너뜀\n{e}")
         return
     try:
         c1 = c2 = 0
         live = {a.split("@")[0] for a in mail_accounts()}
         for key in archived_series():
             raw_dst = stage_src = f"mail_{key}"
-            c1 += sync_tree(PROJ / "output" / "raw_mail" / key, FOUNDRY / "00_raw" / raw_dst, mirror=False)
+            c1 += u_api.push(PROJ / "output" / "raw_mail" / key,
+                             f"{U}/00_raw/{raw_dst}", mirror=False)
             # frozen 계열은 미러하지 않는다 — 로컬 코퍼스가 비면 U 원본이 지워진다.
             # 원본은 지우지 않는 쪽으로 틀린다.
-            c2 += sync_tree(PROJ / "output" / "stage" / stage_src,
-                            FOUNDRY / "10_stage" / stage_src, mirror=(key in live))
+            c2 += u_api.push(PROJ / "output" / "stage" / stage_src,
+                             f"{U}/10_stage/{stage_src}", mirror=(key in live))
         # 대장과 SSOT 색인도 U 에 둔다 — 판정 근거가 원본 옆에 남아야 추적이 된다
-        c2 += sync_tree(PROJ / "output" / "stage" / "mail_index",
-                        FOUNDRY / "10_stage" / "mail_index", mirror=True)
+        c2 += u_api.push(PROJ / "output" / "stage" / "mail_index",
+                         f"{U}/10_stage/mail_index", mirror=True)
         led = PROJ / "output" / "stage" / "mail_대장.tsv"
         if led.exists():
-            dst = FOUNDRY / "10_stage" / "mail_대장.tsv"
-            if (not dst.exists()) or dst.stat().st_size != led.stat().st_size:
-                shutil.copy2(led, dst)
-                c2 += 1
-        c3 = sync_tree(PROJ / "output" / "raw_calendar", FOUNDRY / "00_raw" / "calendar", mirror=True)
-        c4 = sync_tree(PROJ / "output" / "stage" / "calendar", FOUNDRY / "10_stage" / "calendar", mirror=True)
-        c5 = sync_tree(PROJ / "output" / "raw_messenger", FOUNDRY / "00_raw" / "messenger", mirror=False)
-        c6 = sync_tree(PROJ / "output" / "stage" / "messenger", FOUNDRY / "10_stage" / "messenger", mirror=True)
+            c2 += u_api.push(led.parent, f"{U}/10_stage",
+                             mirror=False)
+        c3 = u_api.push(PROJ / "output" / "raw_calendar", f"{U}/00_raw/calendar", mirror=True)
+        c4 = u_api.push(PROJ / "output" / "stage" / "calendar", f"{U}/10_stage/calendar", mirror=True)
+        c5 = u_api.push(PROJ / "output" / "raw_messenger", f"{U}/00_raw/messenger", mirror=False)
+        c6 = u_api.push(PROJ / "output" / "stage" / "messenger", f"{U}/10_stage/messenger", mirror=True)
         log(f"sync done: mail_raw+{c1} mail_stage~{c2} cal_raw~{c3} cal_stage~{c4} msg_raw+{c5} msg_stage~{c6}")
-        skipped = getattr(sync_tree, "skipped", 0)
-        if skipped >= 5:
-            alert_operator(f"동기화 중 파일 {skipped}건 건너뜀 — workspace/mail_cycle.log 확인 필요")
-        sync_tree.skipped = 0
-    except PermissionError as e:
-        log(f"sync 권한 오류(TCC): {e}")
-        alert_operator(f"드라이브 동기화 권한 오류(TCC): {e}")
+    except u_api.UnavailableError as e:
+        # 올리다 실패하면 **조용히 넘기지 않는다.** 올린 줄 알고 넘어가는 것이
+        # 마운트 시절의 실패 양식이었다
+        log(f"U 올리기 실패: {e}")
+        alert_operator(f"U 올리기 실패 — 다음 회차에 재시도\n{e}")
 
     if LOG.stat().st_size > 1_000_000:
         LOG.write_text(LOG.read_text()[-500_000:])

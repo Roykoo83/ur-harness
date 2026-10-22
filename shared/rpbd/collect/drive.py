@@ -43,8 +43,27 @@ def classify(path_lower: str, name_lower: str) -> tuple[str, str]:
     return "other", "기타/참고"
 
 
-DEFAULT_DRIVE_ACTIVE = "{{MOUNT_ROOT}}/공유 드라이브/U/2. R&D 사업/2-3. 수행중인 사업"
-DEFAULT_ARCHIVE = "{{MOUNT_ROOT}}/공유 드라이브/U/{{WORKSPACE_NAME}}_Workflow/연구기획_프로젝트_아카이브"
+def _u(key: str) -> str:
+    """U 하위 경로를 API 로 받아 로컬 경로를 돌려준다.
+
+    예전에는 마운트 경로를 자리표시자로 조립했다. `{{WORKSPACE_NAME}}_Workflow`
+    가 작업공간 이름으로 치환되어 **없는 폴더**(`output_Workflow`)를 가리켰다
+    — 경로가 틀려도 빈 수집 결과로만 보였다 (2026-10-22 실측).
+    """
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[3] / "core"))
+    from lib import u_api                                      # noqa: PLC0415
+    from lib.config import require                             # noqa: PLC0415
+    return str(u_api.stage(require(f"u.paths.{key}")))
+
+
+def default_drive_active() -> str:
+    return _u("active_projects")
+
+
+def default_archive() -> str:
+    return _u("archive")
 
 TOP_LEVEL_WHITELIST = (
     "1. 연구기획사업부",
@@ -104,8 +123,8 @@ class DriveCollector:
         active_dir: str | Path | None = None,
         archive_dir: str | Path | None = None,
     ):
-        self.active_dir = Path(active_dir) if active_dir else Path(DEFAULT_DRIVE_ACTIVE)
-        self.archive_dir = Path(archive_dir) if archive_dir else Path(DEFAULT_ARCHIVE)
+        self.active_dir = Path(active_dir) if active_dir else Path(default_drive_active())
+        self.archive_dir = Path(archive_dir) if archive_dir else Path(default_archive())
         self.drive_root = self.active_dir.parent.parent
 
     def collect(self, ctx: RunContext) -> Iterator[dict[str, Any]]:

@@ -351,7 +351,7 @@ def findings_expiry() -> list[dict]:
         if age_d > 83:                          # UA 토큰 90일
             out.append(dict(sev="경고", code="token-expiry", svc=name,
                             msg=f"{name}: 발급 {age_d:.0f}일 경과 (90일 만료 · 갱신 절차 HANDOVER.md R1)"))
-    sa = Path.home() / ".rpb/sa_{{WORKSPACE_SLUG}}.json"
+    sa = _P("service_account")
     if not sa.exists():
         out.append(dict(sev="정지", code="sa-missing", svc="drive",
                         msg="서비스계정 키 없음 — SSOT API 접근 불가"))
