@@ -14,9 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import hb
 from lib.ssot_io import count as ssot_count, listing as ssot_list
 
-REPO = Path.home() / "{{WORKSPACE_NAME}}"
 HARNESS = Path(__file__).resolve().parents[1]   # 저장소 루트 — 코드는 여기 있다
-MOUNT = Path("{{MOUNT_ROOT}}/공유 드라이브/{{SSOT_DRIVE}}")
 SERVICES = ["nworks-mail", "ssot-promote", "u-changefeed", "ssot-index", "rpbd-tasks",
             "nworks-brief", "weekly-dashboard", "fathom-minutes", "hr-sync-check", "watchdog"]
 R = []
@@ -184,7 +182,7 @@ def w2() -> None:
     for f in ("agents/nworks/nworks_cycle.py",
               "agents/nworks/mail_parser.py",
               "agents/nworks/mail_collector.py"):
-        t = (REPO / f).read_text(encoding="utf-8", errors="ignore")
+        t = (HARNESS / f).read_text(encoding="utf-8", errors="ignore")
         if '"research" if' in t or 'else "research"' in t:
             hits.append(f)
     chk("W2", "research 분기 제거", not hits, "; ".join(hits) or "잔존 0")
@@ -221,7 +219,7 @@ def w2() -> None:
     # 쓰기 경로 — SSOT_rw 사용 여부
     legacy = []
     for f in ("core/publish_dashboards.py", "tasks/tasks/make_weekly_pptx.py"):
-        t = (REPO / f).read_text(encoding="utf-8", errors="ignore")
+        t = (HARNESS / f).read_text(encoding="utf-8", errors="ignore")
         if "gdrive,team_drive" in t and "폴백" not in t.split("gdrive,team_drive")[0][-80:]:
             legacy.append(f)
     chk("W2", "SSOT 쓰기 경로 서비스계정 전환", not legacy, "; ".join(legacy) or "gdrive 직접사용 0")
@@ -259,7 +257,7 @@ def w3() -> None:
     CODE_EXT = (".py", ".sh")
     try:
         r = subprocess.run(["grep", "-rl", "CloudStorage/GoogleDrive", str(HARNESS / "core"),
-                            str(REPO / "projects")], capture_output=True, text=True, timeout=120)
+                            str(HARNESS / "agents"), str(HARNESS / "shared")], capture_output=True, text=True, timeout=120)
         raw = [x for x in r.stdout.splitlines() if x.strip()]
     except Exception:                                        # noqa: BLE001
         raw = []
@@ -270,6 +268,10 @@ def w3() -> None:
             return pat in Path(f).read_text(encoding="utf-8", errors="ignore")
         except OSError:
             return False
+    # 검사기 자신은 찾는 문자열을 품고 있다 — 그것은 참조가 아니라 **패턴**이다.
+    # 목록으로 빼면 다음에 또 빠뜨린다. 파일 하나로 구조적으로 면제한다
+    SELF = Path(__file__).resolve()
+    code = [f for f in code if Path(f).resolve() != SELF]
     u_ref = [f for f in code if has(f, "공유 드라이브/U/")]
     undoc = [f for f in code if has(f, "{{SSOT_DRIVE}}") and Path(f).name not in ALLOW]
     chk("W3", "마운트 참조가 전부 문서화된 예외인가", not undoc,
@@ -302,7 +304,7 @@ def w3() -> None:
          f"ssot-push status={d.get('status') if d else '없음'}"
          + (f" · {age:.0f}분 전 (허용 90분)" if age is not None else " · 시각 불명")))
     # 유령 파일 (삭제 미전파의 결과) — 있으면 드러낸다
-    gp = REPO / "state/ssot_ghosts.json"
+    gp = _P("state") / "ssot_ghosts.json"
     ng = 0
     if gp.exists():
         try:
@@ -311,31 +313,49 @@ def w3() -> None:
             ng = -1
     chk("W3", "SSOT 유령 파일(클라우드 단독)", ng == 0,
         f"{ng}건 — ssot_push 가 탐지만 하고 지우지 않는다(마운트 지연과 실제 삭제를 구별 못 하므로)")
-    # 진짜 안전 속성 ②: 수렴 — 해시로 양방향 확인
-    conv = []
-    for rel in ("50_도구상자", "20_전략"):
-        src = MOUNT / rel
-        if not src.is_dir():
-            conv.append(f"{rel}:마운트없음"); continue
-        for a, b, lab in ((str(src), f"SSOT_ro:{rel}", "미배포"),
-                          (f"SSOT_ro:{rel}", str(src), "미반영")):
-            try:
-                q = subprocess.run(["rclone", "check", a, b, "--one-way", "--checksum",
-                                    "--exclude", ".*"], capture_output=True, text=True,
-                                   timeout=300)
-            except subprocess.TimeoutExpired:
-                # 마운트가 대량 변경을 따라잡는 중이면 해시 대조가 5분을 넘는다.
-                # 그때 예외로 죽으면 **게이트 전체가 결과를 못 낸다** — 다른 검사까지 못 본다.
-                # 느린 것은 "어긋났다"가 아니다. 판정 불가로 남기고 계속한다.
-                conv.append(f"{rel}:{lab}(판정불가·타임아웃)")
-                continue
-            if q.returncode != 0:
-                conv.append(f"{rel}:{lab}")
-    chk("W3", "마운트↔클라우드 수렴(해시 양방향)", not conv,
-        "; ".join(conv) or "감시 폴더 전부 0 diff")
+    # 진짜 안전 속성 ②: **쓴 것이 도착하는가**
+    #
+    # 예전 질문은 「마운트와 클라우드가 수렴하는가」였다. 마운트가 쓰기 경로였기
+    # 때문이다. 2026-10-22 부터 쓰기는 API 다 — 그러면 그 질문은 「이 기계의
+    # DriveFS 가 밀렸는가」를 묻는 것이 되고, 그것은 데이터의 안전과 무관하다.
+    # (실제로 그 검사는 업로드가 선 동안 영구 빨간불이었다.)
+    #
+    # 바꾼 질문은 두 개다. 둘 다 답할 수 있고, 둘 다 틀리면 데이터가 상한다.
+    #   ① API 쓰기 경로가 살아 있고 **도착이 확인되는가** — 탐침을 쓰고 읽고 지운다
+    #   ② 기계 구역 산출물이 SSOT 에 **실재하는가** — 비어 있으면 게시가 실패한 것
+    probe_rel = "_시스템/상태/_게이트_왕복.md"
+    try:
+        from lib import ssot_io                                 # noqa: PLC0415
+        tmp = _P("state") / "_gate_probe.md"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(f"gate probe {time.strftime('%Y-%m-%dT%H:%M:%S')}\n", encoding="utf-8")
+        put_ok, put_msg = ssot_io.put(tmp, probe_rel)
+        back = _P("state") / "_gate_probe_back.md"
+        got = ssot_io.get(probe_rel, back) if put_ok else False
+        same = got and back.read_bytes() == tmp.read_bytes()
+        chk("W3", "API 쓰기 왕복(쓴 것이 도착한다)", bool(same),
+            "쓰고 다시 읽어 같다" if same
+            else (f"쓰기 실패: {put_msg}" if not put_ok else "읽어 온 내용이 다르다"))
+        for f in (tmp, back):
+            f.unlink(missing_ok=True)
+    except Exception as e:                                      # noqa: BLE001
+        chk("W3", "API 쓰기 왕복(쓴 것이 도착한다)", False, f"검사 자체가 실패: {str(e)[:90]}")
+
+    empty = []
+    for z in ssot_io.MACHINE_ZONES:
+        rel = z.rstrip("/")
+        if rel.endswith("주간보고_초안"):
+            continue                                            # 초안은 비어 있을 수 있다
+        n = ssot_count(rel)
+        if n is None:
+            empty.append(f"{rel}:조회실패")
+        elif n == 0:
+            empty.append(f"{rel}:비어있음")
+    chk("W3", "기계 구역 산출물이 SSOT 에 실재한다", not empty,
+        "; ".join(empty) or f"{len(ssot_io.MACHINE_ZONES)}구역 전부 내용 있음")
 
     # health 보드 신선도
-    hp = REPO / "state/health.md"
+    hp = _P("state") / "health.md"
     age = (time.time() - hp.stat().st_mtime) / 60 if hp.exists() else 1e9
     chk("W3", "health 보드 15분 내 갱신", age < 20, f"{age:.0f}분 전")
     # Hermes 메타 감시
@@ -347,7 +367,8 @@ def w3() -> None:
         j = ""
     chk("W3", "Hermes 와치독 메타 감시 등록", "{{WORKSPACE_SLUG}}-watchdog-meta" in j, "hermes cron list")
     # 경보 receipt
-    rec = sorted((REPO / "state/alerts").glob("2026*.json")) if (REPO / "state/alerts").is_dir() else []
+    ad = _P("state") / "alerts"
+    rec = sorted(ad.glob("2026*.json")) if ad.is_dir() else []
     ok = False
     if rec:
         try:

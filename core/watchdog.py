@@ -163,9 +163,18 @@ def findings_consistency() -> list[dict]:
       클라우드→마운트 누락 = 마운트가 최신을 못 보여주는 것 (KTL 사고)
     """
     out = []
+    # 마운트는 **선택적**이다 (2026-10-22). 자동화는 전부 API 로 읽고 쓴다.
+    # 마운트가 없거나 아파도 데이터는 안전하다 — 그러니 「정지」가 아니다.
+    # 정지로 두면 마운트 없는 기계(다음 인수인계자)에서 와치독이 늘 빨간불이고,
+    # 그러면 진짜 정지가 묻힌다. 사람이 마운트로 쓰는 동안은 알 필요가 있으니
+    # **경고로는 남긴다.**
+    if not MOUNT.is_dir():
+        return [dict(sev="정보", code="mount-absent", svc="drive",
+                     msg="마운트 없음 — 자동화는 API 로 돌므로 문제가 아니다")]
     sick = _mount_probe()
     if sick:
-        return [dict(sev="정지", code="mount-sick", svc="drive", msg=sick)]
+        return [dict(sev="경고", code="mount-sick", svc="drive",
+                     msg=sick + " · 자동화는 API 로 돌므로 데이터는 안전하다")]
     for rel in CONSISTENCY:
         d = MOUNT / rel
         if not d.is_dir():
@@ -173,6 +182,8 @@ def findings_consistency() -> list[dict]:
                             msg=f"{rel}: 마운트 경로 없음 (DriveFS 미동작?)"))
             continue
         for src, dst, label, code in (
+                # 사람이 마운트로 쓴 것이 올라갔는지. 자동화 산출물은 API 로
+                # 올리므로 이 지연은 **사람의 쓰기**에만 해당한다
                 (str(d), f"SSOT_ro:{rel}", "클라우드 미배포", "push-lag"),
                 (f"SSOT_ro:{rel}", str(d), "마운트 미반영", "mount-lag")):
             try:
@@ -183,8 +194,11 @@ def findings_consistency() -> list[dict]:
                 # 마운트 병증. 2026-09-07 ssot-push 가 EDEADLK 경로에서 5.7시간을 보냈다 —
                 # 한 경로가 막히면 나머지도 막혀 있다고 보고 즉시 멈춘다. 체커 자신이
                 # 마운트에 갇히면 아무것도 보고하지 못한다 (M 안 조건 ②).
-                out.append(dict(sev="정지", code="mount-sick", svc="drive",
-                                msg=f"{rel}: 마운트 응답 없음 {CHECK_TIMEOUT_S}s — 마운트 불신. 이후 경로 검사 중단"))
+                # 2026-10-22: 자동화는 API 로 읽고 쓴다. 마운트가 막혀도 데이터는
+                # 안전하므로 「정지」가 아니다. 검사를 더 못 하는 것은 사실이니 알린다
+                out.append(dict(sev="경고", code="mount-sick", svc="drive",
+                                msg=f"{rel}: 마운트 응답 없음 {CHECK_TIMEOUT_S}s — "
+                                    "이후 마운트 경로 검사 중단 (자동화는 API 로 돈다)"))
                 return out
             except Exception as e:                          # noqa: BLE001
                 out.append(dict(sev="경고", code="api-fail", svc="drive",
@@ -316,9 +330,13 @@ def findings_mount_junk() -> list[dict]:
         junk = [ln for ln in p.stdout.splitlines()
                 if _JUNK_RE.search(unicodedata.normalize("NFC", ln))]
         if junk:
-            out.append(dict(sev="정지", code="mount-junk", svc="drive",
-                            msg=f"{rel}: 마운트에 충돌 잔재 {len(junk)}건 ({junk[0][-40:]} …) — "
-                                f"기계 구역이므로 마운트에서 rm 해야 DriveFS 재업로드가 멈춘다"))
+            # 이것은 마운트 사정이 아니다. Drive 에 **동명 사본**이 생겼다는 뜻이고,
+            # 그러면 API 읽기가 옛 쌍둥이를 읽는다 — 2026-10-22 실측: `_INDEX.md` 가
+            # 양쪽에서 다르게 보였다. 데이터가 상하므로 정지로 남긴다
+            out.append(dict(sev="정지", code="drive-dup", svc="drive",
+                            msg=f"{rel}: 동명 사본 {len(junk)}건 ({junk[0][-40:]} …) — "
+                                "API 읽기가 옛 사본을 읽을 수 있다. "
+                                "`drive_dedupe.py` 로 목록을 보고 정리한다"))
     return out
 
 

@@ -57,7 +57,7 @@ READONLY_PREFIX = (
     "업무 무관(시스템 알림·마케팅·중복) 여부는 '.../output/stage/mail_대장.tsv' 의 promote 열로 판정하라\n"
     "4. 부서 대화: '.../output/stage/messenger/<방>/YYYY-MM.md' (dept·과제예산·AX_TF)\n"
     "5. 확정 문서(과제·예산·인허가): "
-    "'{{MOUNT_ROOT}}/공유 드라이브/{{SSOT_DRIVE}}/' "
+    "SSOT 공유 드라이브(`{{SSOT_DRIVE}}`). "
     "폴더 내용은 각 폴더의 _INDEX.md를 먼저 읽어 판단하라.\n"
     "주의: 일정표에 항목이 있는 것은 '예정'일 뿐 완료가 아니다. 완료 여부는 반드시 원장으로 판정하라.\n"
     "[답변 규칙] 간결한 한국어. 근거가 된 값을 함께 밝힌다. "
@@ -78,7 +78,7 @@ OPERATOR_PREFIX = (
     "업무 무관(시스템 알림·마케팅·중복) 여부는 '.../output/stage/mail_대장.tsv' 의 promote 열로 판정하라\n"
     "4. 부서 대화: '.../output/stage/messenger/<방>/YYYY-MM.md' (dept·과제예산·AX_TF)\n"
     "5. 확정 문서(과제·예산·인허가): "
-    "'{{MOUNT_ROOT}}/공유 드라이브/{{SSOT_DRIVE}}/' "
+    "SSOT 공유 드라이브(`{{SSOT_DRIVE}}`). "
     "폴더 내용은 각 폴더의 _INDEX.md를 먼저 읽어 판단하라.\n"
     "주의: 일정표에 항목이 있는 것은 '예정'일 뿐 완료가 아니다. 완료 여부는 반드시 원장으로 판정하라.\n"
     "답은 간결한 한국어로. 근거가 된 값을 함께 밝힌다.\n\n요청: ")
