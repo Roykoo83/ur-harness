@@ -89,7 +89,11 @@ def mapping() -> dict[str, str]:
         "WORKSPACE_NAME":   ws.name,
         "WORKSPACE_SLUG":   ws.name.lower().replace("_", "-"),
         "HOME":             str(Path.home()),
-        "MOUNT_ROOT":       mount or str(ws),
+        # 마운트를 안 쓰면 **토큰을 그대로 남긴다.** 작업공간으로 몰래 바꾸면
+        # `<작업공간>/공유 드라이브/…` 같은 없는 경로가 만들어지고,
+        # 서비스는 "파일이 없다"로 죽는다 — 원인이 설정이라는 걸 알 수 없다.
+        # 토큰이 남으면 --check 가 "값 없는 토큰"으로 잡아 준다.
+        "MOUNT_ROOT":       mount or None,
         "MOUNT_REL":        (mount.split(str(Path.home()) + "/")[-1] if mount else ""),
         "DEPT_ROOT":        cfg("ssot.dept_root"),
     }

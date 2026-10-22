@@ -51,7 +51,22 @@ def latest_source() -> tuple[Path, str] | None:
 
 
 def snapshot(f: Path) -> dict:
-    wb = openpyxl.load_workbook(f, data_only=True)
+    # 클라우드 마운트의 자리표시자는 아직 내려받히지 않아 zip 이 아니다.
+    # 한 파일 때문에 서비스 전체가 죽으면 나머지 예산도 갱신되지 않는다 —
+    # 그 파일만 건너뛰고 **건너뛴 사실을 남긴다**(조용히 지나가지 않는다).
+    try:
+        with f.open("rb") as _fh:
+            if _fh.read(2) != b"PK":
+                print(f"! 건너뜀(아직 내려받히지 않음): {f.name}", flush=True)
+                return None
+    except OSError as e:
+        print(f"! 건너뜀(읽기 실패 {type(e).__name__}): {f.name}", flush=True)
+        return None
+    try:
+        wb = openpyxl.load_workbook(f, data_only=True)
+    except Exception as e:                                   # noqa: BLE001
+        print(f"! 건너뜀(열지 못함 {type(e).__name__}): {f.name}", flush=True)
+        return None
     sheets = {}
     for name in wb.sheetnames:
         ws = wb[name]
@@ -81,7 +96,15 @@ def main() -> int:
             print(f"· 변경 없음 — 최신 {ymd} 이미 반영")
             return 0
 
-    data = {"date": ymd, "source_file": nfc(f.name), "sheets": snapshot(f)}
+    sheets = snapshot(f)
+    if sheets is None:
+        # 원본을 읽지 못했다. **빈 것으로 덮어쓰지 않는다** —
+        # 빈 스냅샷을 쓰면 다음 단계가 "예산 0건"을 사실로 읽는다
+        print(f"✗ 원본을 읽지 못해 갱신하지 않는다: {nfc(f.name)}\n"
+              f"  클라우드 마운트가 아직 내려받지 않았을 수 있다. "
+              f"파일을 한 번 열어 받은 뒤 다시 돌린다", flush=True)
+        return 1
+    data = {"date": ymd, "source_file": nfc(f.name), "sheets": sheets}
     target.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
     ptr.write_text(json.dumps({"date": ymd, "file": target.name,
                                "source": nfc(f.name)}, ensure_ascii=False), encoding="utf-8")

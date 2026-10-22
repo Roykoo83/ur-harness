@@ -60,7 +60,23 @@ def human(n):
 
 
 def main():
-    root = Path(sys.argv[1]).resolve()
+    # 인자가 없으면 설정의 정본 경로를 쓴다 — 스케줄러는 인자 없이 부른다.
+    # 예전에는 여기서 IndexError 로 죽었고, 로그를 봐야만 이유를 알 수 있었다
+    if len(sys.argv) > 1:
+        root = Path(sys.argv[1]).resolve()
+    else:
+        import sys as _s
+        _s.path.insert(0, str(Path(__file__).resolve().parent))
+        from lib.config import cfg, paths                     # noqa: PLC0415
+        mount, drive = paths.mount_root, cfg("org.drives.ssot.name")
+        if not (mount and drive):
+            raise SystemExit(
+                "정본 경로를 알 수 없다.\n"
+                "  인자로 주거나, 설정에 operator.mount_root 와 "
+                "org.drives.ssot.name 을 채운다")
+        root = (Path(mount) / "공유 드라이브" / drive).resolve()
+    if not root.is_dir():
+        raise SystemExit(f"정본 폴더가 없다: {root}")
     out = [f"# 자료 인덱스 — {root.name}", "",
            "원본은 `source/`(읽기 전용)에, 파싱본(Markdown)은 `parsed/source/`에 같은 구조로 있습니다.",
            "에이전트는 **파싱본을 읽고**, 원문 확인이 필요할 때만 원본을 엽니다.",
