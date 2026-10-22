@@ -361,7 +361,6 @@ def cmd_step(dry: bool, only: str | None) -> int:
         _rc1, items1 = gate()
         after = owned_by(keys, items1)
         total1 = len(items1)
-        print(f"  후: {len(after)}건 남음 (게이트 총 {total1}항목)")
         # **항목이 사라진 것은 닫힌 것이 아니다.**
         # 게이트가 예외로 죽으면 그 블록의 검사가 통째로 빠지고, 실패 수만 보면
         # 「고쳐졌다」로 읽힌다 — 2026-10-22 실측: 26→20 으로 줄었는데 통과로 쳤다
@@ -377,13 +376,16 @@ def cmd_step(dry: bool, only: str | None) -> int:
             rep = (paths.state / "상시위반.md")
             body = rep.read_text(encoding="utf-8") if rep.exists() else ""
             missing = [n for _m, n, _d in after if n not in body]
-            print(f"  후: {len(after)}건 남음 — 보고 단계이므로 **닫지 않는다**")
+            print(f"  후: {len(after)}건 남음 (총 {total1}항목)"
+                  " — 보고 단계이므로 **닫지 않는다**")
             for mark, name, d in after:
                 print(f"      {mark} {name} — {d[:70]}")
             if missing:
                 print(f"\n  ✗ 보고서에 빠진 항목 {len(missing)}건: {missing}")
                 return 1
-        elif len(after) >= len(before) and before:
+        else:
+            print(f"  후: {len(after)}건 남음 (게이트 총 {total1}항목)")
+        if not REPORT_ONLY.get(ph) and len(after) >= len(before) and before:
             for mark, name, d in after:
                 print(f"      {mark} {name} — {d[:70]}")
             print("\n  닫히지 않았다. 다음 단계로 가지 않는다")
