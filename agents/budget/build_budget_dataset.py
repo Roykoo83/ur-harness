@@ -27,10 +27,21 @@ PROJ = Path(__file__).resolve().parents[1]
 SNAP = PROJ / "data" / "예산현황"
 DS = PROJ / "data" / "dataset"
 HOME = Path.home()
-# 2026-09-05: 마운트 쓰기는 유지하되 **도착을 API 해시로 검증**한다(lib/ssot_io.verify_dir).
-# 업로드 rc=0 은 도착의 증거가 아니다 — "☁ 반영"이 거짓이던 지점.
-SSOT_OUT = (HOME / "{{MOUNT_REL}}"
-            / "공유 드라이브/{{SSOT_DRIVE}}/{{DEPT_ROOT}}/20_예산/10_시스템등록_예산현황")
+# SSOT 로는 **API 로** 올린다 (2026-10-22). 예전에는 마운트에 직접 만들고
+# 도착만 API 해시로 검증했다 — 업로드 rc=0 은 도착의 증거가 아니었고, 마운트
+# 업로드가 서면 만든 줄 알고 넘어갔다. 지금은 로컬에 만들고 한 번에 올린다.
+SSOT_REL = "{{DEPT_ROOT}}/20_예산/10_시스템등록_예산현황"
+
+
+def _stage_dir() -> Path:
+    """게시 전 로컬 스테이지. 여기서 폴더를 통째로 다시 만든다."""
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib.config import paths                                # noqa: PLC0415
+    return paths.state / "_budget_publish" / "10_시스템등록_예산현황"
+
+
+SSOT_OUT = _stage_dir()
 
 # 시트 → 과제 ID. 원장 시트명이 바뀌면 여기만 고친다.
 SHEET_MAP = {
@@ -195,11 +206,11 @@ def fmt(v):
 
 
 def publish(ds: dict, history: list) -> None:
-    if not SSOT_OUT.parent.exists():
-        print("  ⚠ SSOT 예산 폴더 없음 — 게시 생략")
-        return
+    # 로컬 스테이지를 비우고 다시 만든다. 여기서 rmtree 는 안전하다 —
+    # 우리가 만든 폴더다. SSOT 쪽은 마지막에 put(mirror=True) 가 맞춘다
     if SSOT_OUT.exists():
         shutil.rmtree(SSOT_OUT)
+    SSOT_OUT.parent.mkdir(parents=True, exist_ok=True)
     (SSOT_OUT / "과제").mkdir(parents=True)
     (SSOT_OUT / "data").mkdir()
 
@@ -284,6 +295,21 @@ def publish(ds: dict, history: list) -> None:
         "| `data/budget_*.json` | 기계용 정규 레코드 (회계·증빙 자동화의 입력) |",
         "| `data/history.jsonl` | 변경 이력 원본 |",
     ]) + "\n", encoding="utf-8")
+
+    # 여기까지는 로컬 스테이지다. 이제 **한 번에** 올린다.
+    # mirror=True — 전체를 매번 다시 만드는 기계 구역 폴더이므로 지워진 파일은
+    # SSOT 에서도 지워져야 한다. 예전에 마운트에서 rmtree 가 하던 일이다.
+    # 기계 구역이 아니면 put 이 거부한다
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+    from lib import ssot_io                                     # noqa: PLC0415
+    ok, msg = ssot_io.put(SSOT_OUT, SSOT_REL, mirror=True)
+    if not ok:
+        # 못 올렸으면 **게시했다고 말하지 않는다.** 로컬에 만들어 놓고
+        # 「게시 완료」를 찍는 것이 마운트 시절의 실패 양식이었다
+        print(f"  ✗ SSOT 게시 실패: {msg}")
+        print(f"     로컬 스테이지: {SSOT_OUT}")
+        raise SystemExit(1)
     print(f"  → SSOT 게시: 과제 {len(ds['projects'])}건 · 이력 {sum(h['n'] for h in history)}건")
 
 

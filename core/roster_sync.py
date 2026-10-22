@@ -28,10 +28,31 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents"))
 
-SSOT = Path("{{MOUNT_ROOT}}/"
-            "공유 드라이브/{{SSOT_DRIVE}}")
-PEOPLE = SSOT / "00_공통/50_온톨로지/사람"
-ORG = SSOT / "00_공통/10_조직"
+# SSOT 는 **API 로** 읽고 쓴다 (2026-10-22). 예전에는 마운트로 썼고, 마운트에는
+# 구역 가드가 없어서 `사람/`·`10_조직/`(구역표상 **사람 구역**)에 그냥 써졌다.
+# API 로 바꾸면 가드가 막는다 — 막히는 것이 맞다. 그때는 올리지 않고 **제안만**
+# 로컬에 남기고 사람에게 알린다.
+PEOPLE_REL = "00_공통/50_온톨로지/사람"
+ORG_REL = "00_공통/10_조직"
+
+
+def _io():
+    import sys as _s
+    _s.path.insert(0, str(Path(__file__).resolve().parent))
+    from lib import ssot_io                                     # noqa: PLC0415
+    return ssot_io
+
+
+def _stage(rel: str, *, include: str | None = None) -> Path:
+    base = _io().stage(rel, include=include)
+    if base is None:
+        raise SystemExit(f"SSOT `{rel}` 를 API 로 받지 못했다 — 빈 결과로 넘어가면 "
+                         "「온톨로지에 없는 사람」이 거짓으로 늘어난다")
+    return base
+
+
+PEOPLE = _stage(PEOPLE_REL, include="*.md")
+ORG = _stage(ORG_REL)
 TODAY = date.today().isoformat()
 
 # 사람이 아닌 계정이 모여 있는 부서 — 봇·클라우드·프로젝트 계정
@@ -200,7 +221,15 @@ def write_roster_doc(nw: dict[str, dict], onto: dict, jd: set[str]) -> None:
           "어느 쪽도 명부가 아니었고, 그래서 AI 가 회사 인원을 틀리게 알고 있었습니다.",
           "지금은 네이버웍스가 정본이고, 온톨로지·직무기술서는 그것과 대조되는 관측입니다.", ""]
     ROSTER_DOC.write_text("\n".join(L), encoding="utf-8")
-    print(f"✓ 명부 문서 — {ROSTER_DOC.relative_to(SSOT)}  ({len(nw)}명 · {len(by_dept)}부서)")
+    ok, msg = _io().put(ROSTER_DOC, f"{ORG_REL}/_명부.md")
+    if ok:
+        print(f"✓ 명부 문서 — {ORG_REL}/_명부.md  ({len(nw)}명 · {len(by_dept)}부서)")
+    else:
+        # 구역 가드가 막았다. **올렸다고 말하지 않는다.**
+        print(f"◑ 명부 문서를 올리지 않았다 — {msg}")
+        print(f"   제안본: {ROSTER_DOC}  ({len(nw)}명 · {len(by_dept)}부서)")
+        print("   `00_공통/10_조직/` 은 구역표상 사람 구역이다. 자동화가 쓰게 하려면")
+        print("   구역표(50_도구상자/00_규범/SSOT_쓰기구역표.md)를 사람이 고친다")
 
 
 def main() -> int:
@@ -314,6 +343,17 @@ def main() -> int:
         t = set_field(t, "rosterNote", why)
         p.write_text(t, encoding="utf-8"); n_ok += 1
         print(f"✓ status {name} — {why}")
+
+    # 위의 쓰기는 **스테이지(로컬 사본)** 에 한 것이다. SSOT 로 올리는 것은 여기서
+    # 한 번에 하고, 구역 가드가 막으면 올리지 않고 제안으로 남긴다
+    ok, msg = _io().put(PEOPLE, PEOPLE_REL)
+    if ok:
+        print(f"✓ 온톨로지 `사람/` 반영 {n_ok}건")
+    else:
+        print(f"◑ 온톨로지 `사람/`을 올리지 않았다 — {msg}")
+        print(f"   제안본 {n_ok}건: {PEOPLE}")
+        print("   `00_공통/50_온톨로지/사람/` 은 구역표상 사람 구역이다.")
+        print("   사람이 제안본을 보고 반영하거나, 구역표를 고친다")
     write_roster_doc(nw, onto, jd)
     print(f"\n완료 {n_ok}건")
     return 0

@@ -29,10 +29,8 @@ def _src() -> Path:
     from lib.config import require                             # noqa: PLC0415
     return u_api.stage(require("u.paths.budget_status"))
 OUT = Path(__file__).resolve().parents[1] / "data" / "예산현황"
-# 2026-09-05: 마운트 쓰기는 유지하되 **도착을 API 해시로 검증**한다(lib/ssot_io.verify_dir).
-# 업로드 rc=0 은 도착의 증거가 아니다 — "☁ 반영"이 거짓이던 지점.
-SSOT_OUT = (HOME / "{{MOUNT_REL}}"
-            / "공유 드라이브/{{SSOT_DRIVE}}/{{DEPT_ROOT}}/20_예산/10_시스템등록_예산현황")
+# SSOT 게시는 이 스크립트가 하지 않는다 — build_budget_dataset.py 가 API 로 올린다.
+# 예전에는 여기에 마운트 경로 상수가 있었지만 어디서도 쓰이지 않았다 (2026-10-22 확인).
 
 
 def nfc(s: str) -> str:

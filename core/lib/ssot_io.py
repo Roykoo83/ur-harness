@@ -25,6 +25,11 @@ MACHINE_ZONES = (
     "00_공통/20_일정/naverworks_캘린더/",
     "{{DEPT_ROOT}}/50_대시보드/",
     "{{DEPT_ROOT}}/00_부서정본/주간보고_초안/",
+    # 아래 둘은 구역표에서 **처음부터 기계 구역**이었는데 수단이 「마운트」여서
+    # 이 목록에 없었다. 마운트에는 가드가 없으니 그냥 써졌고, 코드와 구역표가
+    # 어긋난 채 돌았다. 2026-10-22 수단을 API 로 바꾸며 등재한다
+    "{{DEPT_ROOT}}/20_예산/10_시스템등록_예산현황/",
+    "00_공통/50_온톨로지/_점검/",
 )
 MACHINE_MARKERS = ("/_API스냅샷_", "/_INDEX.md", "/_동기화_확인.md")   # 경로 어디에 있어도 기계 소유
 
@@ -40,9 +45,17 @@ def _rclone() -> str | None:
 
 
 def in_machine_zone(rel: str) -> bool:
+    """`rel` 이 기계 구역인가. **폴더 자신도 그 구역이다.**
+
+    목록은 끝 슬래시로 적혀 있다(`.../메일/`). 그래서 폴더 자신(`.../메일`)을
+    주면 startswith 가 어긋났다 — 예산 데이터셋 폴더를 통째로 올리려다 「사람
+    구역」으로 거부당했다 (2026-10-22 실측). 끝 슬래시를 맞춰서 본다.
+    """
     import unicodedata
-    r = unicodedata.normalize("NFC", rel).lstrip("/")
-    return r.startswith(MACHINE_ZONES) or any(m in "/" + r for m in MACHINE_MARKERS)
+    r = unicodedata.normalize("NFC", rel).lstrip("/").rstrip("/")
+    zones = tuple(z.rstrip("/") for z in MACHINE_ZONES)
+    return (r.startswith(tuple(z + "/" for z in zones)) or r in zones
+            or any(m in "/" + r for m in MACHINE_MARKERS))
 RW = "SSOT_rw:"          # 서비스계정 · SSOT 콘텐츠관리자
 RO = "SSOT_ro:"          # 서비스계정 · 읽기전용
 LEGACY = "gdrive,team_drive={{SSOT_DRIVE_ID}}:"   # 폴백(쿼터 포화 가능)
@@ -77,20 +90,36 @@ def _remotes() -> list[str]:
 
 
 def put(src: Path | str, rel_dst: str, verify_after: bool = True,
-        quiet: bool = True, allow_human_zone: bool = False) -> tuple[bool, str]:
+        quiet: bool = True, allow_human_zone: bool = False,
+        mirror: bool = False) -> tuple[bool, str]:
     """파일이면 copyto, 폴더면 copy. (성공여부, 메시지). verify_after 면 해시 대조까지.
 
-    **사람 구역에는 쓰지 않는다.** 거기는 마운트로 쓴다. 정말 필요하면
-    allow_human_zone=True 를 명시하고 그 사유를 호출부 주석에 남긴다.
+    **사람 구역에는 쓰지 않는다.** 예전 문장은 「거기는 마운트로 쓴다」였다.
+    마운트는 더 이상 쓰기 경로가 아니다(2026-10-22) — 구역은 **전송 수단**이
+    아니라 **누가 그 파일의 주인인가**를 가른다. 사람 구역의 파일은 사람이 쓴다.
+    자동화가 꼭 써야 하면 allow_human_zone=True 를 명시하고 사유를 호출부에 남긴다.
     """
     src = Path(src)
     if not src.exists():
         return False, f"원본 없음: {src}"
     if not allow_human_zone and not in_machine_zone(rel_dst):
-        return False, (f"구역 위반: `{rel_dst}` 는 사람 구역 — API 로 쓰지 않는다. "
-                       f"마운트로 쓰거나 구역표(50_도구상자/00_규범/SSOT_쓰기구역표.md)를 고친다")
+        return False, (f"구역 위반: `{rel_dst}` 는 사람 구역 — 자동화가 쓰지 않는다. "
+                       f"주인이 사람이면 사람이 쓴다. 기계 구역이어야 한다면 "
+                       f"구역표(50_도구상자/00_규범/SSOT_쓰기구역표.md)를 고친다")
     remote = _remotes()[0]
-    op = "copyto" if src.is_file() else "copy"
+    if mirror:
+        # **지우는 동기화.** 2026-09-08 에 SSOT 전체에 sync 를 돌려 다른 사람이
+        # 만든 파일 7건을 지운 적이 있다. 그래서 두 조건을 둔다 —
+        #   ① 기계 구역일 때만. 거기는 자동화가 모든 파일의 주인이다
+        #   ② 폴더일 때만. 파일 하나에 sync 를 걸면 형제 파일이 지워진다
+        # 전체를 매번 다시 만드는 폴더(예: 예산 데이터셋)에는 이것이 맞는 뜻이다.
+        # 예전에는 마운트에서 rmtree 로 같은 일을 했다
+        if allow_human_zone or not in_machine_zone(rel_dst):
+            return False, (f"미러 거부: `{rel_dst}` 는 기계 구역이 아니다. "
+                           "남의 파일을 지울 수 있다")
+        if src.is_file():
+            return False, "미러 거부: 폴더에만 쓴다 (파일 하나에 걸면 형제가 지워진다)"
+    op = "copyto" if src.is_file() else ("sync" if mirror else "copy")
     dst = f"{remote}{rel_dst}"
     try:
         r = subprocess.run([(RCLONE or _rclone()), op, str(src), dst, "--drive-upload-cutoff", "64M"]
@@ -192,4 +221,45 @@ def count(rel_path: str) -> int | None:
             return None
         return len([l for l in r.stdout.splitlines() if l.strip()])
     except Exception:                                   # noqa: BLE001
+        return None
+
+
+def get(rel: str, dest: Path | str, *, timeout: int | None = None) -> bool:
+    """SSOT 의 한 파일을 로컬로 내려받는다. 성공 여부만 돌려준다.
+
+    마운트로 읽지 않는 이유: 마운트는 이 기계의 DriveFS 에 달려 있고, 아직
+    내려받지 않은 파일은 **조용히 빈 본문**이 된다. 2026-09-22 보안대장 1차
+    실행에서 224건이 그렇게 실패했고, 그 224건은 파일명만 보고 등급이 매겨졌다.
+    """
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        r = subprocess.run([(RCLONE or _rclone()), "copyto",
+                            f"{_remotes()[0]}{rel}", str(dest), "-q"],
+                           capture_output=True, text=True,
+                           timeout=timeout or TIMEOUT)
+        return r.returncode == 0 and dest.exists()
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def stage(rel_dir: str, dest: Path | str | None = None, *,
+          include: str | None = None, timeout: int | None = None) -> Path | None:
+    """SSOT 의 한 폴더를 로컬에 펼쳐 그 경로를 돌려준다. 실패하면 None.
+
+    `include` 를 주면 그 이름 패턴만 받는다 — 폴더가 커도 필요한 것만 받으면
+    된다(아카이브 4,147건 중 대상이 수십 건인 경우가 그렇다).
+    """
+    from lib.config import paths as _p
+    out = Path(dest) if dest else (_p.state / "ssot_stage" / rel_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    cmd = [(RCLONE or _rclone()), "copy", f"{_remotes()[0]}{rel_dir}", str(out),
+           "--fast-list", "-q"]
+    if include:
+        cmd += ["--include", include]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           timeout=timeout or TIMEOUT)
+        return out if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
         return None

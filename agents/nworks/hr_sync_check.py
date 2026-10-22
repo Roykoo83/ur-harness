@@ -16,10 +16,19 @@ import sys
 import unicodedata
 from datetime import datetime
 
-SSOT = "{{MOUNT_ROOT}}/공유 드라이브/{{SSOT_DRIVE}}"
-PEOPLE = f"{SSOT}/00_공통/50_온톨로지/사람"
-ARCHIVE = f"{SSOT}/90_보관/컨플루언스_아카이브"
-OUT_DIR = f"{SSOT}/00_공통/50_온톨로지/_점검"
+# SSOT 는 **API 로** 본다. 마운트는 이 기계에만 있고, 아직 내려받지 않은 파일은
+# 조용히 빈 본문이 된다 — 그러면 「온톨로지에 없다」가 거짓으로 나온다.
+PEOPLE_REL = "00_공통/50_온톨로지/사람"
+ARCHIVE_REL = "90_보관/컨플루언스_아카이브"
+OUT_REL = "00_공통/50_온톨로지/_점검"
+
+
+def _ssot_io():
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "core"))
+    from lib import ssot_io                                    # noqa: PLC0415
+    return ssot_io
 NWCTL = str(Path(__file__).resolve().parent / "nwctl")
 
 
@@ -43,6 +52,11 @@ def directory_names():
 def ontology_people():
     """name -> {status, exitDate, joinDate}"""
     people = {}
+    base = _ssot_io().stage(PEOPLE_REL)
+    if base is None:
+        raise SystemExit(f"온톨로지 `사람/`을 API 로 받지 못했다 ({PEOPLE_REL}) — "
+                         "빈 결과로 넘어가면 전원이 「온톨로지없음」으로 보고된다")
+    PEOPLE = str(base)
     for fn in os.listdir(PEOPLE):
         if not fn.endswith(".md") or fn.startswith("_"):
             continue
@@ -63,7 +77,14 @@ def hr_events():
     """Scan 경영관리부 주간업무보고 for 입사/퇴사 lines."""
     events = []
     pat = re.compile(r"([가-힣]{2,4})\s*(?:리더|책임|매니저|CIO|팀장)?\s*(입사|퇴사)\s*\((\d{2}\.\d{2}\.\d{2})\)")
-    for root, _, files in os.walk(ARCHIVE):
+    # 대상은 **이름으로 먼저 걸러진다**(경영관리부 주간업무보고). 아카이브 전체를
+    # 받을 필요가 없다 — 예전에 「4,147건이라 API 가 위험하다」고 적어 둔 것은
+    # 이름 필터를 못 본 판단이었다 (2026-10-22 정정)
+    arch = _ssot_io().stage(ARCHIVE_REL, include="*경영관리부*.md")
+    if arch is None:
+        raise SystemExit(f"컨플루언스 아카이브를 API 로 받지 못했다 ({ARCHIVE_REL}) — "
+                         "빈 결과는 「인사 이벤트 없음」으로 읽혀 오판을 만든다")
+    for root, _, files in os.walk(arch):
         for f in files:
             if not f.endswith(".md") or "경영관리부" not in nfc(f):
                 continue
@@ -130,10 +151,20 @@ def main():
               "생성: `scripts/agents/hr_sync_check.py` (읽기 전용 — 온톨로지·조직도를 수정하지 않음)",
               "인사 이벤트 출처: 경영관리부 주간업무보고"]
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    path = f"{OUT_DIR}/조직도_온톨로지_점검_{datetime.now():%Y%m%d}.md"
-    open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
-    print(path)
+    io = _ssot_io()
+    name = f"조직도_온톨로지_점검_{datetime.now():%Y%m%d}.md"
+    from lib.config import paths as _p                          # noqa: PLC0415
+    tmp = _p.state / "_hr_sync" / name
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    ok, msg = io.put(tmp, f"{OUT_REL}/{name}")
+    if not ok:
+        # 올리지 못했으면 **성공으로 끝내지 않는다.** 보고서가 없는데 0 을
+        # 돌려주면 다음 사람이 「점검했는데 문제 없었다」로 읽는다
+        print(f"보고서 업로드 실패: {msg}")
+        print(f"로컬 사본: {tmp}")
+        return 1
+    print(f"{OUT_REL}/{name}")
     print(f"미반영 {len(drift)} · 잔존 {len(stale)} · 온톨로지없음 {len(missing)} · 조직도없음 {len(absent)}")
     return 0
 

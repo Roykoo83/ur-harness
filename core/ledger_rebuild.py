@@ -27,8 +27,6 @@ from lib.config import paths
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "shared"))
 
-MOUNT = Path("{{MOUNT_ROOT}}/"
-             "공유 드라이브/{{SSOT_DRIVE}}")
 LEDGER_REL = "_시스템/보안/보안대장.tsv"
 CAP_TEXT, CAP_BIN = 2 * 1024 * 1024, 5 * 1024 * 1024
 HEAD = ["보안ID", "보안등급", "파일경로", "파일명", "근거", "판정방식"]
@@ -59,11 +57,12 @@ def nfc(s: str) -> str:
 
 # ── 본문 추출 ───────────────────────────────────────────────────────────
 def extract_api(rel: str, ext: str, size: int) -> tuple[str, str]:
-    """마운트가 못 읽은 파일을 API 로 가져와 읽는다.
+    """파일을 **API 로** 가져와 읽는다. 이것이 기본 경로다.
 
-    2026-09-22 1차 실행에서 마운트 읽기가 224건 실패했다(타임아웃 197 · 파일없음 27) — DriveFS 가
-    아직 내려받지 않았거나 굳은 것이다. 그대로 두면 그 224건은 "파일명만 보고" 매겨진다.
-    원장의 목적이 라벨의 신뢰도이므로, 실패한 것은 API 로 다시 읽는다.
+    2026-09-22 1차 실행에서 마운트 읽기가 224건 실패했다(타임아웃 197 · 파일없음 27)
+    — DriveFS 가 아직 내려받지 않았거나 굳은 것이다. 그대로 두면 그 224건은
+    "파일명만 보고" 매겨진다. 2026-10-22 부터 API 를 먼저 읽고, 마운트는 있는
+    기계에서만 폴백으로 쓴다.
     """
     if size > CAP_BIN:
         return "", "크기초과"
@@ -227,11 +226,14 @@ def main() -> int:
 
     for i, rel in enumerate(targets, 1):
         ext = os.path.splitext(rel)[1].lower()
-        body, how = extract(MOUNT / rel, ext, live[rel])
-        # 마운트가 못 읽었고 본문이 있을 수 있는 종류라면 API 로 한 번 더
-        if not body and how in ("오류:TimeoutError", "오류:FileNotFoundError",
-                                "오류:OSError", "추출실패"):
-            body, how = extract_api(rel, ext, live[rel])
+        # **API 가 먼저다.** 예전에는 마운트를 먼저 읽고 실패한 것만 API 로
+        # 다시 읽었다 — 1차 실행에서 224건이 마운트에서 실패했다. 마운트는 이
+        # 기계에만 있고 DriveFS 가 아직 안 내려받았으면 조용히 빈 본문이 된다.
+        # 원장의 목적이 라벨의 신뢰도이므로, 신뢰할 수 있는 쪽을 먼저 읽는다
+        # **API 만 쓴다.** 마운트 폴백을 두면 바로 그 경로가 조용히 빈 본문을
+        # 돌려준다 — 1차 실행의 224건이 그렇게 「파일명만 보고」 등급이 매겨졌다.
+        # 못 읽은 것은 못 읽었다고 남기고, 등급은 매기지 않는다
+        body, how = extract_api(rel, ext, live[rel])
         if not body:
             unread[how] = unread.get(how, 0) + 1
         lvl, why, mode = classify(rel, body, how)
