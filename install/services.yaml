@@ -30,8 +30,8 @@ services:
     schedule: { every: 1800 }
 
   - name: ssot-index
-    desc: "정본 색인 재생성 (신선도 가드 포함)"
-    exec: core/make-index.py
+    desc: "정본 색인 재생성 — files.tsv·manifest.json·_INDEX.md (API 기준, 급감 가드)"
+    exec: core/ssot_index.py
     schedule: { every: 10800 }
 
   # ── 감시 ────────────────────────────────────────────────────────────
