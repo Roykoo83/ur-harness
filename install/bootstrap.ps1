@@ -1,4 +1,4 @@
-# UR Harness 설치 — Windows 10/11 · Windows Server 2019+
+﻿# UR Harness 설치 — Windows 10/11 · Windows Server 2019+
 #
 #   powershell -ExecutionPolicy Bypass -File install\bootstrap.ps1
 #   powershell -ExecutionPolicy Bypass -File install\bootstrap.ps1 -Check
