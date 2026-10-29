@@ -81,9 +81,13 @@ def push(local: Path | str, subpath: str, *, mirror: bool = False,
     allowed = mirror and any(subpath == o or subpath.startswith(o.rstrip("/") + "/")
                              for o in ok)
     verb = "sync" if allowed else "copy"
-    r = subprocess.run([_rclone(), verb, str(local), f"{remote()}{subpath}",
-                        "--fast-list", "--checkers", "8", "--stats-one-line"],
-                       capture_output=True, text=True, timeout=timeout)
+    try:
+        r = subprocess.run([_rclone(), verb, str(local), f"{remote()}{subpath}",
+                            "--fast-list", "--checkers", "8", "--stats-one-line"],
+                           capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # An uncaught timeout killed the whole cycle before it could log anything
+        raise UnavailableError(f"올리기 시간 초과 ({subpath}, {timeout}s) — 다음 회차에 이어서")
     if r.returncode != 0:
         raise UnavailableError(f"올리기 실패 ({subpath}): {r.stderr.strip()[:200]}")
     if mirror and not allowed:
