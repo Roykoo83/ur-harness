@@ -27,6 +27,7 @@ sys.path.insert(0, str(REPO / "core"))
 from lib.config import cfg, load, missing  # noqa: E402
 
 BUILD = REPO / "build"
+RUNTIME_DIRS = ("output", "workspace", "agents/output")  # kept across rebuilds
 COPY_DIRS = ["core", "agents", "shared", "tasks", "skills"]
 COPY_EXT = {".py", ".sh", ".md", ".json", ".yaml", ".yml", ".mjs", ".js", ".html", ".txt", ".tsv"}
 TOKEN = re.compile(r"\{\{([A-Z_]+)\}\}")
@@ -166,7 +167,18 @@ def cmd_check() -> int:
 
 def cmd_build() -> int:
     mp = mapping()
+    # Runtime data lives inside build/ (collected mail, stage, logs, state). A rebuild
+    # must replace code only: wiping it on 2026-10-29 deleted the whole mail corpus.
+    stash = REPO / ".build-runtime"
+    kept = []
     if BUILD.exists():
+        for rel in RUNTIME_DIRS:
+            src = BUILD / rel
+            if src.exists():
+                dst = stash / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst))
+                kept.append(rel)
         shutil.rmtree(BUILD)
     n_files = n_subs = 0
     for d in COPY_DIRS:
@@ -207,6 +219,16 @@ def cmd_build() -> int:
                 left += len(TOKEN.findall(p.read_text(encoding="utf-8", errors="replace")))
             except OSError:
                 pass
+    for rel in kept:
+        dst = BUILD / rel
+        if dst.exists():
+            shutil.rmtree(dst)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(stash / rel), str(dst))
+    if stash.exists():
+        shutil.rmtree(stash)
+    if kept:
+        print(f"실행 데이터 보존: {', '.join(kept)}")
     print(f"build/ 에 {n_files}개 파일 · 토큰 {n_subs}곳 치환")
     print(f"  남은 자리표시자: {left}곳" + ("  ✓" if left == 0 else "  ← --check 로 확인한다"))
     return 0 if left == 0 else 1

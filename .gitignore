@@ -60,3 +60,4 @@ Thumbs.db
 
 # 스케줄러 생성물 — 대상 기계의 경로가 박히므로 커밋하지 않는다
 install/schtasks/UR-*.xml
+.build-runtime/
