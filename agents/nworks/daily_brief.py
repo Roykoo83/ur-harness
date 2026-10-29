@@ -319,7 +319,7 @@ def summarize_mails(mails: list) -> str:
                      for t in threads)
 
 
-RT_DAYS = 90       # NAVER WORKS UA refresh token lifetime
+RT_DAYS = 90       # NAVER WORKS UA refresh token lifetime (Developer Console, checked 2026-10-29)
 RT_WARN_DAYS = 14  # start warning two weeks before expiry
 
 
@@ -345,7 +345,7 @@ def token_expiry_lines(today: datetime.date) -> list:
         elif left <= RT_WARN_DAYS:
             out.append(f"⚠️ 네이버웍스 메일 API({acct}) 토큰 만료 D-{left} ({exp}) >> 만료 전 재동의 필요: nwctl ua-auth")
         else:
-            out.append(f"🔑 네이버웍스 메일 API({acct}) 토큰 만료 D-{left} ({exp})")
+            out.append(f"🔑 네이버웍스 메일 API({acct}) 토큰 만료 D-{left} ({exp}) · Rotation On: 수집이 돌 때마다 90일 자동 연장")
     return out
 
 
