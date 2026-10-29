@@ -105,7 +105,7 @@ def cmd_mail_pull(a):
     from pathlib import Path as P
     sys.path.insert(0, str(P(__file__).parent / "agents"))
     from mail_collector import collect
-    root = P(__file__).resolve().parents[1] / "output" / "raw_mail"
+    root = P(__file__).resolve().parents[2] / "output" / "raw_mail"  # project root, same as mail_parser/daily_brief
     import json
     from mail_collector import DEPT_ADDRESSES
     if a.filter == "none":

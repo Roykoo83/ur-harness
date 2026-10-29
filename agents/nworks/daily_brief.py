@@ -319,6 +319,52 @@ def summarize_mails(mails: list) -> str:
                      for t in threads)
 
 
+RT_DAYS = 90       # NAVER WORKS UA refresh token lifetime
+RT_WARN_DAYS = 14  # start warning two weeks before expiry
+
+
+def token_expiry_lines(today: datetime.date) -> list:
+    """Countdown to NAVER WORKS mail API (UA refresh token) expiry. Mail collection stops at 0."""
+    import glob
+    import os
+    out = []
+    for path in sorted(glob.glob(os.path.expanduser("~/.nworks/ua_token_*.json"))):
+        try:
+            tok = json.loads(Path(path).read_text())
+        except Exception:
+            continue
+        issued = tok.get("rt_issued_at")
+        acct = Path(path).stem.replace("ua_token_", "")
+        if not issued:
+            out.append(f"🔑 네이버웍스 메일 API({acct}) 토큰 발급일 기록 없음 >> 만료일 확인 필요")
+            continue
+        exp = datetime.date.fromtimestamp(issued) + datetime.timedelta(days=RT_DAYS)
+        left = (exp - today).days
+        if left < 0:
+            out.append(f"⛔ 네이버웍스 메일 API({acct}) 토큰 만료됨 ({exp}) >> 메일 수집 중단. 재동의 필요: nwctl ua-auth")
+        elif left <= RT_WARN_DAYS:
+            out.append(f"⚠️ 네이버웍스 메일 API({acct}) 토큰 만료 D-{left} ({exp}) >> 만료 전 재동의 필요: nwctl ua-auth")
+        else:
+            out.append(f"🔑 네이버웍스 메일 API({acct}) 토큰 만료 D-{left} ({exp})")
+    return out
+
+
+def mail_pipeline_line() -> str:
+    """One-line health of the mail pipeline: newest collected mail and parsed count."""
+    # Only the live collection account matters (frozen past series are not counted).
+    accts = [d for d in (PROJ / "output" / "raw_mail").iterdir() if d.is_dir()] \
+        if (PROJ / "output" / "raw_mail").exists() else []
+    if not accts:
+        return "📮 메일 수집 원본 0건 >> 수집 경로 점검 필요"
+    live = max(accts, key=lambda d: (d / "state.json").stat().st_mtime if (d / "state.json").exists() else 0)
+    raws = list(live.glob("*/[0-9]*.json"))
+    if not raws:
+        return f"📮 메일 수집 원본 0건({live.name}) >> 수집 경로 점검 필요"
+    ts = datetime.datetime.fromtimestamp(max(f.stat().st_mtime for f in raws))
+    parsed = sum(1 for _ in (PROJ / "output" / "stage" / f"mail_{live.name}").glob("*/*.md"))
+    return f"📮 메일 수집 정상({live.name}) · 수집 {len(raws)}건 · 정리 {parsed}건 · 최근 수집 {ts:%m/%d %H:%M}"
+
+
 def compose(mode: str, today: datetime.date) -> str:
     if mode == "morning":
         cal_day = today
@@ -351,6 +397,9 @@ def compose(mode: str, today: datetime.date) -> str:
              else f"{n_thread}개 사안 · 메일 {len(mails)}건")
     lines.append(f"\n📧 {mail_label} 부서 수신 메일 ({count})")
     lines.append(summarize_mails(mails))
+    lines.append("")
+    lines.append(mail_pipeline_line())
+    lines.extend(token_expiry_lines(today))
     return "\n".join(lines)
 
 

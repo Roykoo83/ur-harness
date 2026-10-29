@@ -100,7 +100,9 @@ def exchange_code(code: str, account: str) -> None:
     }, timeout=30)
     if resp.status_code != 200:
         raise RuntimeError(f"UA 토큰 교환 실패 {resp.status_code}: {resp.text[:300]}")
-    _save(_cache_path(account), resp.json())
+    data = resp.json()
+    data["rt_issued_at"] = int(time.time())  # fresh consent issues a new RT
+    _save(_cache_path(account), data)
 
 
 def get_ua_token(account: str) -> str:
@@ -125,7 +127,11 @@ def get_ua_token(account: str) -> str:
         raise RuntimeError(
             f"UA 토큰 갱신 실패 {resp.status_code} — RT 만료(90일) 시 재동의 필요: {resp.text[:200]}")
     new = resp.json()
-    if "refresh_token" not in new:  # rotation off keeps old RT
-        new["refresh_token"] = tok["refresh_token"]
+    if "refresh_token" not in new or new["refresh_token"] == tok["refresh_token"]:
+        new["refresh_token"] = tok["refresh_token"]  # rotation off keeps old RT
+        if "rt_issued_at" in tok:
+            new["rt_issued_at"] = tok["rt_issued_at"]
+    else:
+        new["rt_issued_at"] = int(time.time())  # rotation on: new RT, new 90 days
     _save(path, new)
     return new["access_token"]

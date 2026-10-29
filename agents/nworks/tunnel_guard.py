@@ -34,6 +34,35 @@ STATE = Path.home() / ".nworks" / "tunnel_state.json"
 URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
 
+def _darwin_tunnel_label() -> str:
+    """Find the loaded launchd job that runs the tunnel (any naming scheme, guard excluded).
+
+    The scheduler migration left the tunnel under its original label while this guard
+    assumed a renamed one, so every restart silently targeted a job that does not exist.
+    """
+    out = subprocess.run(["launchctl", "list"], capture_output=True, text=True).stdout
+    labels = [ln.split()[-1] for ln in out.splitlines()[1:] if ln.split()]
+    hits = [x for x in labels if "tunnel" in x.lower() and "guard" not in x.lower()]
+    return hits[0] if hits else "ur-tunnel"
+
+
+def _cf_log() -> Path:
+    """cloudflared log: ours if present, else wherever the running tunnel job writes it."""
+    if CF_LOG.exists():
+        return CF_LOG
+    import plistlib                                           # noqa: PLC0415
+    for p in (Path.home() / "Library" / "LaunchAgents").glob("*tunnel*.plist"):
+        if "guard" in p.name or not p.name.endswith(".plist"):
+            continue
+        try:
+            err = plistlib.loads(p.read_bytes()).get("StandardErrorPath")
+        except Exception:
+            continue
+        if err and Path(err).exists():
+            return Path(err)
+    return CF_LOG
+
+
 def log(m: str) -> None:
     GUARD_LOG.parent.mkdir(exist_ok=True)
     with GUARD_LOG.open("a") as f:
@@ -49,7 +78,7 @@ def current_url() -> str | None:
     2026-08-14~18 나흘간 부서방 아카이빙이 조용히 멈춘 원인이 이것이다.
     """
     try:
-        urls = [u for u in URL_RE.findall(CF_LOG.read_text())
+        urls = [u for u in URL_RE.findall(_cf_log().read_text())
                 if not u.startswith("https://api.")]
         return urls[-1] if urls else None
     except OSError:
@@ -82,6 +111,7 @@ def restart_tunnel() -> None:
     osname = platform.system().lower()
     label = "ur-tunnel"
     if osname == "darwin":
+        label = _darwin_tunnel_label()
         uid = os.getuid()                                     # 박지 않는다
         cmd = ["launchctl", "kickstart", "-k", f"gui/{uid}/{label}"]
     elif osname == "windows":
