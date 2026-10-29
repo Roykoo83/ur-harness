@@ -211,6 +211,10 @@ def main() -> None:
         live = {a.split("@")[0] for a in mail_accounts()}
         for key in archived_series():
             raw_dst = stage_src = f"mail_{key}"
+            if key not in live and not (PROJ / "output" / "raw_mail" / key).is_dir():
+                # A frozen past series that is not on this machine: U already holds it.
+                # Failing here blocked the ledger, calendar and messenger uploads after it.
+                continue
             c1 += u_api.push(PROJ / "output" / "raw_mail" / key,
                              f"{U}/00_raw/{raw_dst}", mirror=False)
             # frozen 계열은 미러하지 않는다 — 로컬 코퍼스가 비면 U 원본이 지워진다.
