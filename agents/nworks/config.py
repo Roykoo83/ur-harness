@@ -26,10 +26,12 @@ def load_config() -> dict:
     if not CONFIG_PATH.exists():
         raise ConfigError(
             f"{CONFIG_PATH} 없음 — P0 앱 등록 후 config.example.json을 참고해 생성하세요")
-    mode = stat.S_IMODE(CONFIG_PATH.stat().st_mode)
-    if mode & 0o077:
-        raise ConfigError(f"{CONFIG_PATH} 권한이 {oct(mode)} — chmod 600 필요")
-    cfg = json.loads(CONFIG_PATH.read_text())
+    # Windows 는 POSIX 권한 비트가 없어 st_mode 가 늘 0o666 으로 보인다 — 접근 제한은 ACL(icacls)로 한다
+    if os.name != "nt":
+        mode = stat.S_IMODE(CONFIG_PATH.stat().st_mode)
+        if mode & 0o077:
+            raise ConfigError(f"{CONFIG_PATH} 권한이 {oct(mode)} — chmod 600 필요")
+    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     missing = [k for k in REQUIRED if not cfg.get(k)]
     if missing:
         raise ConfigError(f"config.json 누락 필드: {missing}")
